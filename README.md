@@ -1,1 +1,1 @@
-1. install serial package: sudo apt-get install ros-$ROS_DISTRO-serial
+install serial package: sudo apt-get install ros-$ROS_DISTRO-serial
