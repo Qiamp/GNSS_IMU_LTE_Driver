@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>imu_gnss_driver</name>
+  <version>0.0.1</version>
+  <description>ROS1驱动, 用于从串口读取IMU和GNSS数据</description>
+  
+  <maintainer email="jiaqi.zhao@connect.polyu.hk">ZHAO Jiaqi PolyU TAS LAB</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  
+  <build_depend>roscpp</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>serial</build_depend>
+  
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>serial</exec_depend>
+
+  <export>
+  </export>
+</package>

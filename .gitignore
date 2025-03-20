@@ -1,0 +1,35 @@
+# Build directories
+build/
+devel/
+install/
+
+# Log files and temporary files
+*.log
+tmp/
+*.tmp
+
+# Python cache files and swap files
+*.pyc
+*.pyo
+*.swp
+
+# Editor settings
+.vscode/
+.idea/
+
+# Compiled files
+*.o
+*.obj
+*.so
+*.exe
+*.out
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Catkin tool directory
+.catkin_tools/
+
+# Logs directory
+logs/

@@ -1,0 +1,4 @@
+<launch>
+  <rosparam file="$(find mqtt_gnss)/config/serial_params.yaml" command="load" ns="mqtt_gnss_driver_node" />
+  <node pkg="mqtt_gnss" type="mqtt_gnss_driver_node" name="mqtt_gnss_driver_node" output="screen" />
+</launch>

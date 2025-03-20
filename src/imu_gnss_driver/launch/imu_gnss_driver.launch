@@ -1,0 +1,4 @@
+<launch>
+  <rosparam file="$(find imu_gnss_driver)/config/serial_params.yaml" command="load" ns="imu_gnss_driver" />
+  <node pkg="imu_gnss_driver" type="imu_gnss_driver_node" name="imu_gnss_driver_node" output="screen" />
+</launch>
