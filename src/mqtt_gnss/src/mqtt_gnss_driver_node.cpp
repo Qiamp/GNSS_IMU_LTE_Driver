@@ -3,9 +3,10 @@
 #include <sensor_msgs/NavSatFix.h>
 #include <mqtt_gnss/mqtt_gnss_driver.h>
 #include <sstream>
-#include <signal.h>  // 用于注册SIGINT信号
+#include <signal.h>  // 用于注册SIGINT信号 //Use to register SIGINT signal
 
 // 将输入字符串根据指定分隔符分割为子字符串，返回结果向量
+// Split the input string into substrings based on the specified delimiter and return the result vector
 std::vector<std::string> splitString(const std::string &s, char delimiter) {
     std::vector<std::string> tokens;
     std::istringstream ss(s);
@@ -17,16 +18,19 @@ std::vector<std::string> splitString(const std::string &s, char delimiter) {
 }
 
 // 发送AT指令并打印日志
+// Send AT command and print log
 void sendATCommand(serial::Serial &serial_port, const std::string &command) {
     serial_port.write(command + "\r\n");  // 发送AT指令
     ROS_INFO_STREAM("Sent command: " << command);
 }
 
-// 检查串口返回数据中是否含关键字，最多等待3秒
+// 通用函数，检查串口返回数据中是否含"OK", "READY", "ok", "ready"等关键字，最多等待3秒
+// General function to check if the returned data from the serial port contains keywords such as "OK", "READY", "ok", "ready", etc., waiting for up to 3 seconds at most
 bool checkResponse(serial::Serial &serial_port) {
     ros::Time start = ros::Time::now();
     std::string fullResponse;
     // 循环等待3秒，将所有返回的数据一次性读取
+    // Loop for 3 seconds to read all the returned data at once
     while ((ros::Time::now() - start) < ros::Duration(3)) {
         size_t avail = serial_port.available();
         if (avail > 0) {
@@ -36,8 +40,10 @@ bool checkResponse(serial::Serial &serial_port) {
     }
     ROS_INFO_STREAM("Received response: " << fullResponse);
     // 定义你希望检查的所有关键字
+    // Define all the keywords you want to check
     const std::vector<std::string> keywords = {"OK", "READY", "ok", "ready"};
     // 检查返回数据中是否包含任一关键字
+    // Check if any keyword is contained in the returned data
     for (const auto &keyword : keywords) {
         if (fullResponse.find(keyword) != std::string::npos) {
             return true;
@@ -46,7 +52,8 @@ bool checkResponse(serial::Serial &serial_port) {
     return false;
 }
 
-// 辅助函数：检查返回数据中是否包含预期关键字（等待最多2秒）
+// 辅助函数：检查返回数据中是否包含预期关键字（自行传入）（等待最多2秒）
+// Auxiliary function: check if the returned data contains the expected keyword (passed in by self) (wait for up to 2 seconds at most)
 bool checkResponseFor(serial::Serial &serial_port, const std::string &expected) {
     ros::Time start = ros::Time::now();
     std::string fullResponse;
@@ -62,15 +69,18 @@ bool checkResponseFor(serial::Serial &serial_port, const std::string &expected) 
 }
 
 // 全局串口指针，用于SIGINT处理函数中访问串口对象
+// Global serial port pointer for accessing the serial port object in the SIGINT processing function
 static serial::Serial* g_serial_ptr = NULL;
 
 // 自定义SIGINT处理函数，在退出前确保断开MQTT连接
+// Custom SIGINT processing function to ensure disconnection of MQTT before exiting
 void shutdownProcedure(int sig)
 {
     if(g_serial_ptr && g_serial_ptr->isOpen())
     {
         ROS_INFO_STREAM("Received SIGINT, initiating shutdown procedure...");
         // 重复发送AT+MDISCONNECT直至接收到OK
+        // Repeat sending AT+MDISCONNECT until OK is received
         while(ros::ok())
         {
             g_serial_ptr->write("AT+MDISCONNECT\r\n");
@@ -95,6 +105,7 @@ void shutdownProcedure(int sig)
         }
         ROS_INFO_STREAM("AT+MDISCONNECT acknowledged, proceeding with AT+MIPCLOSE...");
         // 重复发送AT+MIPCLOSE直至接收到OK
+        // Repeat sending AT+MIPCLOSE until OK is received
         while(ros::ok())
         {
             g_serial_ptr->write("AT+MIPCLOSE\r\n");
@@ -123,7 +134,8 @@ void shutdownProcedure(int sig)
 }
 
 void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr &msg, serial::Serial &serial_port) {
-    // 限制数据发送频率，每3秒执行一次
+    // 限制发送频率为0.5秒
+    // Limit the sending frequency to 0.5 seconds
     static ros::Time lastSentTime(0);
     ros::Time now = ros::Time::now();
     if ((now - lastSentTime) < ros::Duration(0.5)) {
@@ -136,6 +148,7 @@ void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr &msg, serial::Serial &se
     std::string alt_str = std::to_string(msg->altitude);
 
     // 发送初始化AT命令，确保网络注册和MQTT配置正常
+    // Send initialization AT commands to ensure network registration and MQTT configuration are correct
     std::vector<std::string> pre_commands = {
         "AT+CGREG?",
         "AT+CGATT?",
@@ -153,6 +166,7 @@ void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr &msg, serial::Serial &se
     }
     
     // 启动MQTT连接：等待CONNECT OK消息
+    // Start MQTT connection: wait for CONNECT OK message
     bool mipstart_ok = false;
     while (ros::ok() && !mipstart_ok) {
         sendATCommand(serial_port, "AT+MIPSTART=\"broker.emqx.io\",\"1883\"");
@@ -163,6 +177,7 @@ void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr &msg, serial::Serial &se
     }
     
     // 建立MQTT会话：等待CONNACK OK消息
+    // Establish MQTT session: wait for CONNACK OK message
     bool mconnect_ok = false;
     while (ros::ok() && !mconnect_ok) {
         sendATCommand(serial_port, "AT+MCONNECT=1,60");
@@ -173,6 +188,7 @@ void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr &msg, serial::Serial &se
     }
     
     // 持续发布GNSS数据的AT命令
+    // AT command to continuously publish GNSS data
     std::string mpub_cmd = "AT+MPUB=\"test/gnss\",0,0,\"" + lat_str + "," + lon_str + "," + alt_str + "\"";
     while (ros::ok()) {
         sendATCommand(serial_port, mpub_cmd);
@@ -187,19 +203,23 @@ void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr &msg, serial::Serial &se
 
 int main(int argc, char **argv) {
     // 初始化ROS，禁用默认SIGINT处理以注册自定义处理函数
+    // Initialize ROS, disable default SIGINT handling to register custom handling functions
     ros::init(argc, argv, "mqtt_gnss_driver_node", ros::init_options::NoSigintHandler);
     ros::NodeHandle nh("mqtt_gnss_driver_node");
 
     // 注册自定义SIGINT处理函数，确保断开连接后关闭节点
+    // Register custom SIGINT processing function to ensure node shutdown after disconnection
     signal(SIGINT, shutdownProcedure);
 
     // 从参数服务器加载串口配置
+    // Load serial port configuration from the parameter server
     std::string port;
     int baudrate;
     nh.param<std::string>("port", port, "/dev/ttyUSB0");
     nh.param<int>("baudrate", baudrate, 115200);
 
     // 初始化并打开串口连接
+    // Initialize and open serial port connection
     serial::Serial serial_port;
     try {
         serial_port.setPort(port);
@@ -220,12 +240,15 @@ int main(int argc, char **argv) {
     ROS_INFO_STREAM("Serial port opened: " << port << " with baudrate: " << baudrate);
 
     // 设置全局串口指针，供SIGINT处理函数使用
+    // Set the global serial port pointer for use by the SIGINT processing function
     g_serial_ptr = &serial_port;
 
     // 订阅GNSS数据话题
+    // Subscribe to GNSS data topic
     ros::Subscriber gps_sub = nh.subscribe<sensor_msgs::NavSatFix>("/ublox_driver/receiver_lla", 10, boost::bind(gpsCallback, _1, boost::ref(serial_port)));
 
     // 进入事件循环
+    // Enter the event loop
     ros::spin();
 
     serial_port.close();
