@@ -1,0 +1,4 @@
+<launch>
+  <rosparam file="$(find mqtt_imu)/config/serial_params.yaml" command="load" ns="mqtt_imu_driver_node" />
+  <node pkg="mqtt_imu" type="mqtt_imu_driver_node" name="mqtt_imu_driver_node" output="screen" />
+</launch>
