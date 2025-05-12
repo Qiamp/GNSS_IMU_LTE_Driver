@@ -1,0 +1,15 @@
+mqtt_config:
+  client_id: "mqttx_769e9e78"
+  username: "test"
+  password: "test"
+  
+broker:
+  host: "broker.emqx.io"
+  port: 1883
+
+mconnect:
+  clean_session: 1
+  keepalive: 60
+
+topics:
+  imu: "test/imu"

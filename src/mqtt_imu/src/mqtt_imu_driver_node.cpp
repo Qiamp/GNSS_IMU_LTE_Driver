@@ -134,6 +134,21 @@ void shutdownProcedure(int sig)
 }
 
 void imuCallback(const sensor_msgs::Imu::ConstPtr &msg, serial::Serial &serial_port, const std::string& imu_source) {
+    // 获取ROS参数
+    // Get ROS parameters
+    ros::NodeHandle nh("~");
+    std::string client_id, username, password, broker_host, imu_topic;
+    int broker_port, clean_session, keepalive;
+
+    nh.param<std::string>("mqtt_config/client_id", client_id, "mqttx_769e9e78");
+    nh.param<std::string>("mqtt_config/username", username, "test");
+    nh.param<std::string>("mqtt_config/password", password, "test");
+    nh.param<std::string>("broker/host", broker_host, "broker.emqx.io");
+    nh.param<int>("broker/port", broker_port, 1883);
+    nh.param<int>("mconnect/clean_session", clean_session, 1);
+    nh.param<int>("mconnect/keepalive", keepalive, 60);
+    nh.param<std::string>("topics/imu", imu_topic, "test/imu");
+
     // 限制发送频率为0.5秒
     // Limit the sending frequency to 0.5 seconds
     static std::map<std::string, ros::Time> lastSentTimes;
@@ -160,7 +175,7 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr &msg, serial::Serial &serial_p
     std::vector<std::string> pre_commands = {
         "AT+CGREG?",
         "AT+CGATT?",
-        "AT+MCONFIG=\"mqttx_769e9e78\",\"test\",\"test\""
+        "AT+MCONFIG=\"" + client_id + "\",\"" + username + "\",\"" + password + "\""
     };
     for (const auto &cmd : pre_commands) {
         bool cmd_success = false;
@@ -177,7 +192,8 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr &msg, serial::Serial &serial_p
     //Start MQTT connection: wait for CONNECT OK message
     bool mipstart_ok = false;
     while (ros::ok() && !mipstart_ok) {
-        sendATCommand(serial_port, "AT+MIPSTART=\"broker.emqx.io\",\"1883\"");
+        std::string mipstart_cmd = "AT+MIPSTART=\"" + broker_host + "\",\"" + std::to_string(broker_port) + "\"";
+        sendATCommand(serial_port, mipstart_cmd);
         mipstart_ok = checkResponseFor(serial_port, "CONNECT OK");
         if (!mipstart_ok) {
             ROS_WARN_STREAM("AT+MIPSTART did not return CONNECT OK. Retrying...");
@@ -188,7 +204,8 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr &msg, serial::Serial &serial_p
     //Establish MQTT session: wait for CONNACK OK message
     bool mconnect_ok = false;
     while (ros::ok() && !mconnect_ok) {
-        sendATCommand(serial_port, "AT+MCONNECT=1,60");
+        std::string mconnect_cmd = "AT+MCONNECT=" + std::to_string(clean_session) + "," + std::to_string(keepalive);
+        sendATCommand(serial_port, mconnect_cmd);
         mconnect_ok = checkResponseFor(serial_port, "CONNACK OK");
         if (!mconnect_ok) {
             ROS_WARN_STREAM("AT+MCONNECT did not return CONNACK OK. Retrying...");
@@ -197,7 +214,7 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr &msg, serial::Serial &serial_p
     
     // 持续发布IMU数据的AT命令
     // AT command to continuously publish IMU data
-    std::string mpub_cmd = "AT+MPUB=\"test/imu\",0,0,\"" + data_str + "\"";
+    std::string mpub_cmd = "AT+MPUB=\"" + imu_topic + "\",0,0,\"" + data_str + "\"";
     while (ros::ok()) {
         sendATCommand(serial_port, mpub_cmd);
         if (checkResponse(serial_port)) {
