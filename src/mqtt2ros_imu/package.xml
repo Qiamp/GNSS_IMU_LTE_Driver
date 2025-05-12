@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>mqtt2ros_imu</name>
+  <version>0.0.1</version>
+  <description>MQTT to ROS IMU converter</description>
+
+  <maintainer email="jiaqi.zhao@connect.polyu.hk">ZHAO Jiaqi PolyU TAS LAB</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>roscpp</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+
+  <export>
+  </export>
+</package>

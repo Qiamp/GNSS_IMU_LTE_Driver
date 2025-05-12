@@ -1,0 +1,3 @@
+<launch>
+    <node name="mqtt2ros_imu_node" pkg="mqtt2ros_imu" type="mqtt2ros_imu_node" output="screen" />
+</launch>
