@@ -1,0 +1,14 @@
+broker:
+  host: broker.emqx.io
+  port: 1883
+  user: test
+  pass: test
+client:
+  id: mqttx_88437582
+  clean_session: false
+  keep_alive_interval: 60
+bridge:
+  mqtt2ros:
+    - mqtt_topic: test/imu
+      ros_topic: /mqtt/imu
+      primitive: true
