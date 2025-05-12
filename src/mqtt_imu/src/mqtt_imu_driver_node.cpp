@@ -144,6 +144,8 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr &msg, serial::Serial &serial_p
 
     // 构造 IMU 数据字符串
     std::string data_str = imu_source + "," +
+        std::to_string(msg->header.stamp.sec) + "," +
+        std::to_string(msg->header.stamp.nsec) + "," +
         std::to_string(msg->orientation.x) + "," +
         std::to_string(msg->orientation.y) + "," +
         std::to_string(msg->orientation.z) + "," +
