@@ -1,6 +1,7 @@
 #include <ros/ros.h>
 #include <serial/serial.h>
 #include <sensor_msgs/Imu.h>
+#include <sensor_msgs/NavSatFix.h>
 #include <mqtt_all/mqtt_all_driver.h>
 #include <sstream>
 #include <signal.h>  // 用于注册SIGINT信号 //Use to register SIGINT signal
@@ -133,36 +134,67 @@ void shutdownProcedure(int sig)
     ros::shutdown();
 }
 
-void imuCallback(const sensor_msgs::Imu::ConstPtr &msg, serial::Serial &serial_port, const std::string &imu_source, const std::string &imu_topic) {
-    // 限制发送频率
-    static std::map<std::string, ros::Time> lastSentTimes;
-    ros::Time now = ros::Time::now();
-    if ((now - lastSentTimes[imu_source]) < ros::Duration(0.1)) {
+// 定义全局变量，用于存储 IMU 和 GNSS 数据
+std::string imu0_data, imu1_data, gnss_data;
+
+// IMU0 数据的回调函数
+void imu0Callback(const sensor_msgs::Imu::ConstPtr &msg) {
+    imu0_data = "imu0," +
+                std::to_string(msg->header.stamp.sec) + "," +
+                std::to_string(msg->header.stamp.nsec) + "," +
+                std::to_string(msg->orientation.x) + "," +
+                std::to_string(msg->orientation.y) + "," +
+                std::to_string(msg->orientation.z) + "," +
+                std::to_string(msg->angular_velocity.x) + "," +
+                std::to_string(msg->angular_velocity.y) + "," +
+                std::to_string(msg->angular_velocity.z) + "," +
+                std::to_string(msg->linear_acceleration.x) + "," +
+                std::to_string(msg->linear_acceleration.y) + "," +
+                std::to_string(msg->linear_acceleration.z);
+}
+
+// IMU1 数据的回调函数
+void imu1Callback(const sensor_msgs::Imu::ConstPtr &msg) {
+    imu1_data = "imu1," +
+                std::to_string(msg->header.stamp.sec) + "," +
+                std::to_string(msg->header.stamp.nsec) + "," +
+                std::to_string(msg->orientation.x) + "," +
+                std::to_string(msg->orientation.y) + "," +
+                std::to_string(msg->orientation.z) + "," +
+                std::to_string(msg->angular_velocity.x) + "," +
+                std::to_string(msg->angular_velocity.y) + "," +
+                std::to_string(msg->angular_velocity.z) + "," +
+                std::to_string(msg->linear_acceleration.x) + "," +
+                std::to_string(msg->linear_acceleration.y) + "," +
+                std::to_string(msg->linear_acceleration.z);
+}
+
+// 更新 GNSS 数据的回调函数
+void gnssCallback(const sensor_msgs::NavSatFix::ConstPtr &msg) {
+    gnss_data = "gnss," +
+                std::to_string(msg->latitude) + "," +
+                std::to_string(msg->longitude) + "," +
+                std::to_string(msg->altitude);
+}
+
+// 定时发送综合数据
+void publishCombinedData(serial::Serial &serial_port, const std::string &mqtt_topic) {
+    // 检查是否所有数据都已更新
+    if (imu0_data.empty() || imu1_data.empty() || gnss_data.empty()) {
+        ROS_WARN_STREAM("Not all data sources are ready. Skipping publish...");
         return;
     }
-    lastSentTimes[imu_source] = now;
 
-    // 构造 IMU 数据字符串
-    std::string data_str = imu_source + "," +
-        std::to_string(msg->header.stamp.sec) + "," +
-        std::to_string(msg->header.stamp.nsec) + "," +
-        std::to_string(msg->orientation.x) + "," +
-        std::to_string(msg->orientation.y) + "," +
-        std::to_string(msg->orientation.z) + "," +
-        std::to_string(msg->angular_velocity.x) + "," +
-        std::to_string(msg->angular_velocity.y) + "," +
-        std::to_string(msg->angular_velocity.z) + "," +
-        std::to_string(msg->linear_acceleration.x) + "," +
-        std::to_string(msg->linear_acceleration.y) + "," +
-        std::to_string(msg->linear_acceleration.z);
+    // 构造综合数据字符串
+    std::string combined_data = imu0_data + ";" + imu1_data + ";" + gnss_data;
 
-    // 发布 IMU 数据
-    std::string mpub_cmd = "AT+MPUB=\"" + imu_topic + "\",0,0,\"" + data_str + "\"";
+    // 发布综合数据
+    std::string mpub_cmd = "AT+MPUB=\"" + mqtt_topic + "\",0,0,\"" + combined_data + "\"";
     sendATCommand(serial_port, mpub_cmd);
     if (checkResponse(serial_port)) {
-        ROS_INFO_STREAM("Published IMU data from " << imu_source);
+        ROS_INFO_STREAM("Published combined data to MQTT topic: " << mqtt_topic);
     } else {
-        ROS_WARN_STREAM("AT+MPUB failed. Retrying...");
+        ROS_WARN_STREAM("AT+MPUB failed for combined data. Retrying...");
     }
 }
 
@@ -209,7 +241,7 @@ int main(int argc, char **argv) {
     g_serial_ptr = &serial_port;
 
     // MQTT连接配置
-    std::string client_id, username, password, broker_host, imu_topic;
+    std::string client_id, username, password, broker_host, mqtt_topic;
     int broker_port, clean_session, keepalive;
 
     nh.param<std::string>("mqtt_config/client_id", client_id, "mqttx_769e9e78");
@@ -219,7 +251,7 @@ int main(int argc, char **argv) {
     nh.param<int>("broker/port", broker_port, 1883);
     nh.param<int>("mconnect/clean_session", clean_session, 1);
     nh.param<int>("mconnect/keepalive", keepalive, 60);
-    nh.param<std::string>("topics/imu", imu_topic, "test/imu");
+    nh.param<std::string>("topics/combined", mqtt_topic, "test/combined");
 
     std::vector<std::string> pre_commands = {
         "AT+CGREG?",
@@ -259,13 +291,16 @@ int main(int argc, char **argv) {
         }
     }
 
-    // 订阅IMU数据话题
-    // Subscribe to IMU data topic
-    ros::Subscriber imu0_sub = nh.subscribe<sensor_msgs::Imu>(
-        "/imu_gnss_driver/imu0/data", 10,
-        [&serial_port, imu_topic](const sensor_msgs::Imu::ConstPtr &msg) {
-            imuCallback(msg, serial_port, "imu0", imu_topic);
-        });
+    // 订阅IMU/GNSS数据话题
+    // Subscribe to IMU/GNSS data topic
+    ros::Subscriber imu0_sub = nh.subscribe<sensor_msgs::Imu>("/imu_gnss_driver/imu0/data", 10, imu0Callback);
+    ros::Subscriber imu1_sub = nh.subscribe<sensor_msgs::Imu>("/imu_gnss_driver/imu1/data", 10, imu1Callback);
+    ros::Subscriber gnss_sub = nh.subscribe<sensor_msgs::NavSatFix>("/ublox_driver/receiver_lla", 10, gnssCallback);
+
+    // 定时器，用于定时发送综合数据
+    ros::Timer timer = nh.createTimer(ros::Duration(0.5), [&serial_port, mqtt_topic](const ros::TimerEvent &) {
+        publishCombinedData(serial_port, mqtt_topic);
+    });
     
     // 进入事件循环
     // Enter the event loop
