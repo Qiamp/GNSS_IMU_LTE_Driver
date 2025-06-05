@@ -1,0 +1,4 @@
+<launch>
+  <rosparam file="$(find mqtt_all)/config/serial_params.yaml" command="load" ns="mqtt_all_driver_node" />
+  <node pkg="mqtt_all" type="mqtt_all_driver_node" name="mqtt_all_driver_node" output="screen" />
+</launch>
