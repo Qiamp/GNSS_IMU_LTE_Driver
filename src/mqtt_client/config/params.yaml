@@ -9,6 +9,6 @@ client:
   keep_alive_interval: 60
 bridge:
   mqtt2ros:
-    - mqtt_topic: test/imu
-      ros_topic: /mqtt/imu
+    - mqtt_topic: test/combined
+      ros_topic: /mqtt/combined
       primitive: true

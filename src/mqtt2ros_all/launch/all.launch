@@ -1,0 +1,3 @@
+<launch>
+    <node name="mqtt2ros_all" pkg="mqtt2ros_all" type="mqtt2ros_all" output="screen" />
+</launch>
