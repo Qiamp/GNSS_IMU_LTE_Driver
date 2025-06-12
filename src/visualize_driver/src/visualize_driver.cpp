@@ -27,11 +27,18 @@ public:
         //gnss_sub_ = nh_.subscribe("/mqtt_gnss", 10, &WebSocketServer::gnssCallback, this);
     }
 
+    // For Test
+    // 发送测试GNSS数据
+    void sendTestGnssData() {
+        gnssCallback(nullptr);
+    }
+
     void run() {
         server_.listen(port_);
         server_.start_accept();
         server_.run();
     }
+
 
 private:
     void on_open(websocketpp::connection_hdl hdl) {
@@ -106,7 +113,7 @@ int main(int argc, char **argv) {
     WebSocketServer ws_server(nh, port);
 
     // 模拟调用 gnssCallback 发送测试数据
-    ws_server.gnssCallback(nullptr);
+    ws_server.sendTestGnssData();
     
     // 在单独线程中运行WebSocket服务器
     std::thread server_thread([&ws_server, port]() {
