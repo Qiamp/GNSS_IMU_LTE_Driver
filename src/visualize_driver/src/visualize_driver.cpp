@@ -22,7 +22,7 @@ public:
         
         // 订阅ROS话题
         //For Test
-        imu0_sub_ = nh_.subscribe("/imu_gnss_driver/imu0/data", 10, &WebSocketServer::imu0Callback, this);
+        imu0_sub_ = nh_.subscribe("/imu_gnss_driver/imu1/data", 10, &WebSocketServer::imu0Callback, this);
         imu1_sub_ = nh_.subscribe("/imu_gnss_driver/imu1/data", 10, &WebSocketServer::imu1Callback, this);
         //gnss_sub_ = nh_.subscribe("/mqtt_gnss", 10, &WebSocketServer::gnssCallback, this);
     }
