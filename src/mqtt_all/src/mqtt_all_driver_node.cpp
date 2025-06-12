@@ -170,6 +170,7 @@ void imu1Callback(const sensor_msgs::Imu::ConstPtr &msg) {
 }
 
 // 更新 GNSS 数据的回调函数
+// 未加时间戳
 void gnssCallback(const sensor_msgs::NavSatFix::ConstPtr &msg) {
     gnss_data = "gnss," +
                 std::to_string(msg->latitude) + "," +

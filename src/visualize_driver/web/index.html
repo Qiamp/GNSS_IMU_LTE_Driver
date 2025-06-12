@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMU & GNSS 数据可视化</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://webapi.amap.com/maps?v=1.4.15&key=您的高德地图API密钥&plugin=AMap.MarkerClusterer"></script>
+    <style>
+        body { font-family: 'Microsoft YaHei', sans-serif; margin: 20px; }
+        .container { display: flex; flex-wrap: wrap; gap: 20px; }
+        .chart-container { width: 45%; min-width: 400px; height: 400px; margin-bottom: 25px; }
+        #map-container { width: 100%; height: 500px; margin-top: 50x; border: 1px solid #ccc; }
+        .status-panel { padding: 10px; background: #f5f5f5; border-radius: 5px; margin-bottom: 15px; }
+        h3 {margin-top: 20px; margin-bottom: 20px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
+        .chart-header {display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>IMU & GNSS 实时数据可视化</h1>
+    
+    <div class="status-panel">
+        <p>WebSocket 状态: <span id="wsStatus">未连接</span></p>
+        <p>GNSS 位置: <span id="positionStatus">等待数据...</span></p>
+    </div>
+    
+    <div class="container">
+        <div class="chart-container">
+            <h3>IMU0 角速度 (rad/s)</h3>
+            <canvas id="imu0AngularVelocityChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3>IMU0 线加速度 (m/s²)</h3>
+            <canvas id="imu0LinearAccelerationChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3>IMU1 角速度 (rad/s)</h3>
+            <canvas id="imu1AngularVelocityChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3>IMU1 线加速度 (m/s²)</h3>
+            <canvas id="imu1LinearAccelerationChart"></canvas>
+        </div>
+    </div>
+    
+    <h3>GNSS 位置</h3>
+    <div id="map-container"></div>
+
+    <script>
+        // 配置
+        const WS_SERVER = "ws://localhost:9002";
+        const MAX_POINTS = 50;
+        
+        // 数据存储
+        let imuData = {
+            imu0: { av: { x: [], y: [], z: [] }, la: { x: [], y: [], z: [] } },
+            imu1: { av: { x: [], y: [], z: [] }, la: { x: [], y: [], z: [] } }
+        };
+        
+        // 图表实例
+        const charts = {
+            imu0Av: null,
+            imu0La: null,
+            imu1Av: null,
+            imu1La: null
+        };
+        
+        // 地图实例
+        let map = null;
+        let marker = null;
+        
+        // 初始化图表
+        function initCharts() {
+            const createChart = (elementId, title, labels) => {
+                return new Chart(document.getElementById(elementId), {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            { label: labels[0], borderColor: 'rgb(255, 99, 132)', data: [] },
+                            { label: labels[1], borderColor: 'rgb(54, 162, 235)', data: [] },
+                            { label: labels[2], borderColor: 'rgb(75, 192, 192)', data: [] }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: { y: { beginAtZero: false } },
+                        animation: { duration: 0 },
+                        plugins: { title: { display: true, text: title } }
+                    }
+                });
+            };
+            
+            charts.imu0Av = createChart(
+                'imu0AngularVelocityChart', 
+                'IMU0 角速度', 
+                ['X 轴', 'Y 轴', 'Z 轴']
+            );
+            
+            charts.imu0La = createChart(
+                'imu0LinearAccelerationChart', 
+                'IMU0 线加速度', 
+                ['X 轴', 'Y 轴', 'Z 轴']
+            );
+            
+            charts.imu1Av = createChart(
+                'imu1AngularVelocityChart', 
+                'IMU1 角速度', 
+                ['X 轴', 'Y 轴', 'Z 轴']
+            );
+            
+            charts.imu1La = createChart(
+                'imu1LinearAccelerationChart', 
+                'IMU1 线加速度', 
+                ['X 轴', 'Y 轴', 'Z 轴']
+            );
+        }
+        
+        // 初始化地图
+        function initMap() {
+            map = new AMap.Map('map-container', {
+                zoom: 15,
+                center: [116.397428, 39.90923] // 默认中心点（北京）
+            });
+            
+            marker = new AMap.Marker({
+                position: map.getCenter(),
+                map: map
+            });
+        }
+        
+        // 更新图表数据
+        function updateChart(chart, xData, yData, zData) {
+            chart.data.datasets[0].data = xData;
+            chart.data.datasets[1].data = yData;
+            chart.data.datasets[2].data = zData;
+            chart.update();
+        }
+        
+        // 更新所有图表
+        function updateAllCharts() {
+            updateChart(charts.imu0Av, 
+                imuData.imu0.av.x, 
+                imuData.imu0.av.y, 
+                imuData.imu0.av.z
+            );
+            
+            updateChart(charts.imu0La, 
+                imuData.imu0.la.x, 
+                imuData.imu0.la.y, 
+                imuData.imu0.la.z
+            );
+            
+            updateChart(charts.imu1Av, 
+                imuData.imu1.av.x, 
+                imuData.imu1.av.y, 
+                imuData.imu1.av.z
+            );
+            
+            updateChart(charts.imu1La, 
+                imuData.imu1.la.x, 
+                imuData.imu1.la.y, 
+                imuData.imu1.la.z
+            );
+        }
+        
+        // 更新地图位置
+        function updateMapPosition(lng, lat) {
+            const position = new AMap.LngLat(lng, lat);
+            marker.setPosition(position);
+            map.setCenter(position);
+            document.getElementById('positionStatus').textContent = 
+                `经度: ${lng.toFixed(6)}, 纬度: ${lat.toFixed(6)}`;
+        }
+        
+        // 处理WebSocket消息
+        function handleMessage(data) {
+            const msg = JSON.parse(data);
+            
+            switch(msg.type) {
+                case 'imu0':
+                    updateData('imu0', msg);
+                    break;
+                case 'imu1':
+                    updateData('imu1', msg);
+                    break;
+                case 'gnss':
+                    updateMapPosition(msg.longitude, msg.latitude);
+                    break;
+            }
+            
+            updateAllCharts();
+        }
+        
+        // 更新数据缓冲区
+        function updateData(sensor, msg) {
+            const addData = (arr, value) => {
+                arr.push(value);
+                if (arr.length > MAX_POINTS) arr.shift();
+            };
+            
+            // 更新角速度数据
+            addData(imuData[sensor].av.x, msg.angular_velocity.x);
+            addData(imuData[sensor].av.y, msg.angular_velocity.y);
+            addData(imuData[sensor].av.z, msg.angular_velocity.z);
+            
+            // 更新线加速度数据
+            addData(imuData[sensor].la.x, msg.linear_acceleration.x);
+            addData(imuData[sensor].la.y, msg.linear_acceleration.y);
+            addData(imuData[sensor].la.z, msg.linear_acceleration.z);
+        }
+        
+        // 初始化WebSocket连接
+        function initWebSocket() {
+            const ws = new WebSocket(WS_SERVER);
+            
+            ws.onopen = () => {
+                document.getElementById('wsStatus').textContent = '已连接';
+                document.getElementById('wsStatus').style.color = 'green';
+            };
+            
+            ws.onmessage = (event) => handleMessage(event.data);
+            
+            ws.onerror = () => {
+                document.getElementById('wsStatus').textContent = '连接错误';
+                document.getElementById('wsStatus').style.color = 'red';
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('wsStatus').textContent = '已断开';
+                document.getElementById('wsStatus').style.color = 'gray';
+                // 5秒后重连
+                setTimeout(initWebSocket, 5000);
+            };
+        }
+        
+        // 页面加载完成后初始化
+        window.onload = function() {
+            initCharts();
+            initMap();
+            initWebSocket();
+        };
+    </script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 install serial package: sudo apt-get install ros-$ROS_DISTRO-serial
 sudo apt install libfmt-dev ros-noetic-paho-mqtt-cpp ros-noetic-paho-mqtt-c
+sudo apt-get install libwebsocketpp-dev libjsoncpp-dev
 catkin build
 
 连板卡，用Comtool确定串口号：
