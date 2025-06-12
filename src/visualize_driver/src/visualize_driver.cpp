@@ -21,9 +21,10 @@ public:
         server_.set_close_handler(bind(&WebSocketServer::on_close, this, ::_1));
         
         // 订阅ROS话题
-        imu0_sub_ = nh_.subscribe("/mqtt_imu0", 10, &WebSocketServer::imu0Callback, this);
-        imu1_sub_ = nh_.subscribe("/mqtt_imu1", 10, &WebSocketServer::imu1Callback, this);
-        gnss_sub_ = nh_.subscribe("/mqtt_gnss", 10, &WebSocketServer::gnssCallback, this);
+        //For Test
+        imu0_sub_ = nh_.subscribe("/imu_gnss_driver/imu0/data", 10, &WebSocketServer::imu0Callback, this);
+        imu1_sub_ = nh_.subscribe("/imu_gnss_driver/imu1/data", 10, &WebSocketServer::imu1Callback, this);
+        //gnss_sub_ = nh_.subscribe("/mqtt_gnss", 10, &WebSocketServer::gnssCallback, this);
     }
 
     void run() {
@@ -80,9 +81,13 @@ private:
     void gnssCallback(const sensor_msgs::NavSatFix::ConstPtr &msg) {
         Json::Value data;
         data["type"] = "gnss";
-        data["latitude"] = msg->latitude;
-        data["longitude"] = msg->longitude;
-        data["altitude"] = msg->altitude;
+        // 写死的测试值
+        data["latitude"] = 22.369606;  // 示例值：纬度
+        data["longitude"] = 114.134181;  // 示例值：经度
+        data["altitude"] = 30.0;  // 示例值：海拔高度
+        // data["latitude"] = msg->latitude;
+        // data["longitude"] = msg->longitude;
+        // data["altitude"] = msg->altitude;
         broadcast(data.toStyledString());
     }
 
@@ -99,6 +104,9 @@ int main(int argc, char **argv) {
     
     int port = 9002;
     WebSocketServer ws_server(nh, port);
+
+    // 模拟调用 gnssCallback 发送测试数据
+    ws_server.gnssCallback(nullptr);
     
     // 在单独线程中运行WebSocket服务器
     std::thread server_thread([&ws_server, port]() {
