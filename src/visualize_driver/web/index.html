@@ -5,15 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IMU & GNSS 数据可视化</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://webapi.amap.com/maps?v=1.4.15&key=您的高德地图API密钥&plugin=AMap.MarkerClusterer"></script>
+    <script src="https://webapi.amap.com/maps?v=1.4.15&key=0649e710c32312c76c3127375b5b5ecd&plugin=AMap.MarkerClusterer"></script>
     <style>
         body { font-family: 'Microsoft YaHei', sans-serif; margin: 20px; }
         .container { display: flex; flex-wrap: wrap; gap: 20px; }
         .chart-container { width: 45%; min-width: 400px; height: 400px; margin-bottom: 25px; }
-        #map-container { width: 100%; height: 500px; margin-top: 50x; border: 1px solid #ccc; }
+        #map-container { width: 100%; height: 500px; margin-top: 50px; border: 1px solid #ccc; }
         .status-panel { padding: 10px; background: #f5f5f5; border-radius: 5px; margin-bottom: 15px; }
         h3 {margin-top: 20px; margin-bottom: 20px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
         .chart-header {display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        .debug-panel { padding: 10px; background: #e9f3ff; border-radius: 5px; margin-bottom: 15px; }
+        .button-group { margin-top: 10px; }
+        .button-group button { margin-right: 10px; padding: 5px 10px; }
     </style>
 </head>
 <body>
@@ -21,7 +24,19 @@
     
     <div class="status-panel">
         <p>WebSocket 状态: <span id="wsStatus">未连接</span></p>
-        <p>GNSS 位置: <span id="positionStatus">等待数据...</span></p>
+        <p>GNSS 位置: <span id="positionStatus">已链接...</span></p>
+        <p>IMU0 数据点: <span id="imu0Count">0</span></p>
+        <p>IMU1 数据点: <span id="imu1Count">0</span></p>
+        <div class="button-group">
+            <button onclick="clearData()">清空数据</button>
+            <button onclick="reconnectWebSocket()">重连 WebSocket</button>
+        </div>
+    </div>
+    
+    <div class="debug-panel">
+        <p>最后接收消息: <span id="lastMessage">无</span></p>
+        <p>消息计数: <span id="messageCount">0</span></p>
+        <p>更新频率: <span id="updateFreq">0</span> 次/秒</p>
     </div>
     
     <div class="container">
@@ -50,6 +65,11 @@
         // 配置
         const WS_SERVER = "ws://localhost:9002";
         const MAX_POINTS = 50;
+        let messageCounter = 0;
+        let webSocket = null;
+        let lastUpdateTime = Date.now();
+        let messageQueue = [];
+        let updatePending = false;
         
         // 数据存储
         let imuData = {
@@ -76,16 +96,73 @@
                     type: 'line',
                     data: {
                         datasets: [
-                            { label: labels[0], borderColor: 'rgb(255, 99, 132)', data: [] },
-                            { label: labels[1], borderColor: 'rgb(54, 162, 235)', data: [] },
-                            { label: labels[2], borderColor: 'rgb(75, 192, 192)', data: [] }
+                            { 
+                                label: labels[0], 
+                                borderColor: 'rgb(255, 99, 132)', 
+                                data: [],
+                                pointRadius: 0,  // 移除点，只显示线以提高性能
+                                borderWidth: 1.5
+                            },
+                            { 
+                                label: labels[1], 
+                                borderColor: 'rgb(54, 162, 235)', 
+                                data: [],
+                                pointRadius: 0,
+                                borderWidth: 1.5
+                            },
+                            { 
+                                label: labels[2], 
+                                borderColor: 'rgb(75, 192, 192)', 
+                                data: [],
+                                pointRadius: 0,
+                                borderWidth: 1.5
+                            }
                         ]
                     },
                     options: {
                         responsive: true,
-                        scales: { y: { beginAtZero: false } },
-                        animation: { duration: 0 },
-                        plugins: { title: { display: true, text: title } }
+                        maintainAspectRatio: false,
+                        devicePixelRatio: 1, // 降低分辨率提高性能
+                        scales: { 
+                            x: {
+                                type: 'linear',
+                                position: 'bottom',
+                                title: {
+                                    display: true,
+                                    text: '样本点'
+                                },
+                                ticks: {
+                                    maxTicksLimit: 10 // 减少刻度数量
+                                }
+                            },
+                            y: { 
+                                beginAtZero: false,
+                                title: {
+                                    display: true,
+                                    text: title
+                                },
+                                ticks: {
+                                    maxTicksLimit: 6 // 减少刻度数量
+                                }
+                            }
+                        },
+                        animation: false, // 完全禁用动画
+                        elements: {
+                            line: {
+                                tension: 0 // 禁用贝塞尔曲线，使用直线连接
+                            }
+                        },
+                        plugins: { 
+                            legend: {
+                                position: 'top',
+                                labels: {
+                                    boxWidth: 12,
+                                    font: {
+                                        size: 10
+                                    }
+                                }
+                            }
+                        }
                     }
                 });
             };
@@ -117,78 +194,163 @@
         
         // 初始化地图
         function initMap() {
-            map = new AMap.Map('map-container', {
-                zoom: 15,
-                center: [116.397428, 39.90923] // 默认中心点（北京）
-            });
-            
-            marker = new AMap.Marker({
-                position: map.getCenter(),
-                map: map
-            });
+            try {
+                map = new AMap.Map('map-container', {
+                    zoom: 15,
+                    center: [114.139063, 22.366968],
+                    resizeEnable: true,
+                    dragEnable: true,
+                    zoomEnable: true
+                });
+                
+                marker = new AMap.Marker({
+                    position: map.getCenter(),
+                    map: map
+                });
+            } catch (e) {
+                console.error("地图初始化失败:", e);
+                document.getElementById('map-container').innerHTML = 
+                    '<div style="padding:20px;text-align:center;">地图加载失败,请检查API密钥或网络连接</div>';
+            }
         }
         
-        // 更新图表数据
+        // 使用批处理更新图表数据
         function updateChart(chart, xData, yData, zData) {
-            chart.data.datasets[0].data = xData;
-            chart.data.datasets[1].data = yData;
-            chart.data.datasets[2].data = zData;
-            chart.update();
+            const createDataPoints = (values) => {
+                return values.map((value, index) => {
+                    return {x: index, y: value};
+                });
+            };
+            
+            chart.data.datasets[0].data = createDataPoints(xData);
+            chart.data.datasets[1].data = createDataPoints(yData);
+            chart.data.datasets[2].data = createDataPoints(zData);
+            chart.update('none'); // 使用'none'模式完全跳过动画
         }
         
-        // 更新所有图表
+        // 使用请求动画帧更新图表，避免阻塞UI
         function updateAllCharts() {
-            updateChart(charts.imu0Av, 
-                imuData.imu0.av.x, 
-                imuData.imu0.av.y, 
-                imuData.imu0.av.z
-            );
+            if (updatePending) return;
             
-            updateChart(charts.imu0La, 
-                imuData.imu0.la.x, 
-                imuData.imu0.la.y, 
-                imuData.imu0.la.z
-            );
-            
-            updateChart(charts.imu1Av, 
-                imuData.imu1.av.x, 
-                imuData.imu1.av.y, 
-                imuData.imu1.av.z
-            );
-            
-            updateChart(charts.imu1La, 
-                imuData.imu1.la.x, 
-                imuData.imu1.la.y, 
-                imuData.imu1.la.z
-            );
+            updatePending = true;
+            requestAnimationFrame(() => {
+                if (!charts.imu0Av || !charts.imu0La || !charts.imu1Av || !charts.imu1La) {
+                    updatePending = false;
+                    return;
+                }
+                
+                const now = Date.now();
+                const elapsed = now - lastUpdateTime;
+                if (elapsed > 0) {
+                    const frequency = Math.round((1000 / elapsed) * 10) / 10;
+                    document.getElementById('updateFreq').textContent = frequency;
+                }
+                lastUpdateTime = now;
+                
+                updateChart(charts.imu0Av, 
+                    imuData.imu0.av.x, 
+                    imuData.imu0.av.y, 
+                    imuData.imu0.av.z
+                );
+                
+                updateChart(charts.imu0La, 
+                    imuData.imu0.la.x, 
+                    imuData.imu0.la.y, 
+                    imuData.imu0.la.z
+                );
+                
+                updateChart(charts.imu1Av, 
+                    imuData.imu1.av.x, 
+                    imuData.imu1.av.y, 
+                    imuData.imu1.av.z
+                );
+                
+                updateChart(charts.imu1La, 
+                    imuData.imu1.la.x, 
+                    imuData.imu1.la.y, 
+                    imuData.imu1.la.z
+                );
+                
+                updatePending = false;
+                
+                // 处理队列中的消息
+                processQueue();
+            });
         }
         
         // 更新地图位置
         function updateMapPosition(lng, lat) {
-            const position = new AMap.LngLat(lng, lat);
-            marker.setPosition(position);
-            map.setCenter(position);
-            document.getElementById('positionStatus').textContent = 
-                `经度: ${lng.toFixed(6)}, 纬度: ${lat.toFixed(6)}`;
+            if (!map || !marker) return;
+            
+            try {
+                const position = new AMap.LngLat(lng, lat);
+                marker.setPosition(position);
+                // 设置中心点
+                map.setCenter(position);
+                document.getElementById('positionStatus').textContent = 
+                    `经度: ${lng.toFixed(6)}, 纬度: ${lat.toFixed(6)}`;
+            } catch (e) {
+                console.error("更新地图位置失败:", e);
+            }
+        }
+        
+        // 处理消息队列
+        function processQueue() {
+            if (messageQueue.length === 0 || updatePending) return;
+            
+            // 批量处理数据，减少更新次数
+            const processCount = Math.min(messageQueue.length, 10); // 一次最多处理10条
+            for (let i = 0; i < processCount; i++) {
+                const data = messageQueue.shift();
+                processMessage(data);
+            }
+            
+            // 更新数据点计数
+            document.getElementById('imu0Count').textContent = imuData.imu0.av.x.length;
+            document.getElementById('imu1Count').textContent = imuData.imu1.av.x.length;
+            
+            // 更新图表
+            updateAllCharts();
         }
         
         // 处理WebSocket消息
         function handleMessage(data) {
-            const msg = JSON.parse(data);
+            messageCounter++;
+            document.getElementById('messageCount').textContent = messageCounter;
             
-            switch(msg.type) {
-                case 'imu0':
-                    updateData('imu0', msg);
-                    break;
-                case 'imu1':
-                    updateData('imu1', msg);
-                    break;
-                case 'gnss':
-                    updateMapPosition(msg.longitude, msg.latitude);
-                    break;
+            // 只更新最后接收的消息文本，降低DOM操作频率
+            if (messageCounter % 10 === 0) {
+                document.getElementById('lastMessage').textContent = data.substring(0, 50) + '...';
             }
             
-            updateAllCharts();
+            // 将消息加入队列
+            messageQueue.push(data);
+            
+            // 如果没有待处理的更新，处理队列
+            if (!updatePending) {
+                processQueue();
+            }
+        }
+        
+        // 实际处理单条消息
+        function processMessage(data) {
+            try {
+                const msg = JSON.parse(data);
+                
+                switch(msg.type) {
+                    case 'imu0':
+                        updateData('imu0', msg);
+                        break;
+                    case 'imu1':
+                        updateData('imu1', msg);
+                        break;
+                    case 'gnss':
+                        updateMapPosition(msg.longitude, msg.latitude);
+                        break;
+                }
+            } catch (e) {
+                console.error("处理消息时出错:", e);
+            }
         }
         
         // 更新数据缓冲区
@@ -198,39 +360,75 @@
                 if (arr.length > MAX_POINTS) arr.shift();
             };
             
-            // 更新角速度数据
-            addData(imuData[sensor].av.x, msg.angular_velocity.x);
-            addData(imuData[sensor].av.y, msg.angular_velocity.y);
-            addData(imuData[sensor].av.z, msg.angular_velocity.z);
-            
-            // 更新线加速度数据
-            addData(imuData[sensor].la.x, msg.linear_acceleration.x);
-            addData(imuData[sensor].la.y, msg.linear_acceleration.y);
-            addData(imuData[sensor].la.z, msg.linear_acceleration.z);
+            try {
+                // 更新角速度数据
+                addData(imuData[sensor].av.x, msg.angular_velocity.x);
+                addData(imuData[sensor].av.y, msg.angular_velocity.y);
+                addData(imuData[sensor].av.z, msg.angular_velocity.z);
+                
+                // 更新线加速度数据
+                addData(imuData[sensor].la.x, msg.linear_acceleration.x);
+                addData(imuData[sensor].la.y, msg.linear_acceleration.y);
+                addData(imuData[sensor].la.z, msg.linear_acceleration.z);
+            } catch (e) {
+                console.error("更新数据时出错:", e);
+            }
         }
         
         // 初始化WebSocket连接
         function initWebSocket() {
-            const ws = new WebSocket(WS_SERVER);
-            
-            ws.onopen = () => {
-                document.getElementById('wsStatus').textContent = '已连接';
-                document.getElementById('wsStatus').style.color = 'green';
-            };
-            
-            ws.onmessage = (event) => handleMessage(event.data);
-            
-            ws.onerror = () => {
-                document.getElementById('wsStatus').textContent = '连接错误';
+            try {
+                document.getElementById('wsStatus').textContent = '正在连接...';
+                document.getElementById('wsStatus').style.color = 'blue';
+                
+                webSocket = new WebSocket(WS_SERVER);
+                
+                webSocket.onopen = () => {
+                    document.getElementById('wsStatus').textContent = '已连接';
+                    document.getElementById('wsStatus').style.color = 'green';
+                };
+                
+                webSocket.onmessage = (event) => {
+                    handleMessage(event.data);
+                };
+                
+                webSocket.onerror = (error) => {
+                    document.getElementById('wsStatus').textContent = '连接错误';
+                    document.getElementById('wsStatus').style.color = 'red';
+                };
+                
+                webSocket.onclose = () => {
+                    document.getElementById('wsStatus').textContent = '已断开';
+                    document.getElementById('wsStatus').style.color = 'gray';
+                    setTimeout(initWebSocket, 2000);
+                };
+            } catch (e) {
+                document.getElementById('wsStatus').textContent = '初始化失败';
                 document.getElementById('wsStatus').style.color = 'red';
+                setTimeout(initWebSocket, 2000);
+            }
+        }
+        
+        // 清空数据
+        function clearData() {
+            imuData = {
+                imu0: { av: { x: [], y: [], z: [] }, la: { x: [], y: [], z: [] } },
+                imu1: { av: { x: [], y: [], z: [] }, la: { x: [], y: [], z: [] } }
             };
             
-            ws.onclose = () => {
-                document.getElementById('wsStatus').textContent = '已断开';
-                document.getElementById('wsStatus').style.color = 'gray';
-                // 5秒后重连
-                setTimeout(initWebSocket, 5000);
-            };
+            document.getElementById('imu0Count').textContent = "0";
+            document.getElementById('imu1Count').textContent = "0";
+            
+            messageQueue = [];
+            updateAllCharts();
+        }
+        
+        // 重连WebSocket
+        function reconnectWebSocket() {
+            if (webSocket) {
+                webSocket.close();
+            }
+            setTimeout(initWebSocket, 500);
         }
         
         // 页面加载完成后初始化

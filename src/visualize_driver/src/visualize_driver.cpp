@@ -21,9 +21,9 @@ public:
         server_.set_close_handler(bind(&WebSocketServer::on_close, this, ::_1));
         
         // 订阅ROS话题
-        imu0_sub_ = nh_.subscribe("/mqtt_imu0", 10, &WebSocketServer::imu0Callback, this);
-        imu1_sub_ = nh_.subscribe("/mqtt_imu1", 10, &WebSocketServer::imu1Callback, this);
-        gnss_sub_ = nh_.subscribe("/mqtt_gnss", 10, &WebSocketServer::gnssCallback, this);
+        imu0_sub_ = nh_.subscribe("/imu_gnss_driver/imu0/data", 10, &WebSocketServer::imu0Callback, this);
+        imu1_sub_ = nh_.subscribe("/imu_gnss_driver/imu1/data", 10, &WebSocketServer::imu1Callback, this);
+        gnss_sub_ = nh_.subscribe("/ublox_driver/receiver_lla", 10, &WebSocketServer::gnssCallback, this);
     }
 
     void run() {
