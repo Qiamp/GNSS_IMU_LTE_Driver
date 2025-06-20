@@ -58,15 +58,18 @@ int main(int argc, char** argv)
     ros::Publisher mag1_pub = nh.advertise<sensor_msgs::MagneticField>("imu1/mag", 10);
     // ros::Publisher gps_pub  = nh.advertise<sensor_msgs::NavSatFix>("gps/fix", 10);
 
-    ros::Rate loop_rate(100);
-
+    // 移除固定频率循环，改为依靠串口数据驱动
+    //ros::Rate loop_rate(100);
     while (ros::ok())
     {
+        // 等待直到有数据可读
         if (serial_port.available()) {
             // Read one line (adjust buffer size and line delimiter as per device requirements) // 读取一行数据（依据设备实际情况，调整缓冲区大小和行结束符）
             std::string line = serial_port.readline(1024, "\n");
-            if (line.empty())
+            if (line.empty()) {
+                ros::spinOnce();
                 continue;
+            }
 
             // Data format:  
             // imu0_accel_x,imu1_accel_x,imu0_accel_y,imu1_accel_y,imu0_accel_z,imu1_accel_z,
@@ -79,6 +82,7 @@ int main(int argc, char** argv)
             std::vector<std::string> tokens = splitString(line, ',');
             if (tokens.size() < 21) {
                 ROS_WARN_STREAM("Incomplete data received: " << line); // 接收到的数据不完整
+                ros::spinOnce();
                 continue;
             }
 
@@ -114,6 +118,7 @@ int main(int argc, char** argv)
 
                 ros::Time current_time = ros::Time::now();
 
+                // 为每个传感器创建并发布消息
                 sensor_msgs::Imu imu0_msg;
                 imu0_msg.header.stamp = current_time;
                 imu0_msg.header.frame_id = "imu0_link";
@@ -124,6 +129,7 @@ int main(int argc, char** argv)
                 imu0_msg.angular_velocity.y = imu0_gyro_y;
                 imu0_msg.angular_velocity.z = imu0_gyro_z;
                 imu0_pub.publish(imu0_msg);
+                //ROS_DEBUG("Published IMU0 data");  // 添加发布日志
 
                 sensor_msgs::Imu imu1_msg;
                 imu1_msg.header.stamp = current_time;
@@ -135,6 +141,7 @@ int main(int argc, char** argv)
                 imu1_msg.angular_velocity.y = imu1_gyro_y;
                 imu1_msg.angular_velocity.z = imu1_gyro_z;
                 imu1_pub.publish(imu1_msg);
+                //ROS_DEBUG("Published IMU1 data");  // 添加发布日志
 
                 sensor_msgs::MagneticField mag0_msg;
                 mag0_msg.header.stamp = current_time;
@@ -143,6 +150,7 @@ int main(int argc, char** argv)
                 mag0_msg.magnetic_field.y = imu0_mag_y;
                 mag0_msg.magnetic_field.z = imu0_mag_z;
                 mag0_pub.publish(mag0_msg);
+                //ROS_DEBUG("Published MAG0 data");  // 添加发布日志
 
                 sensor_msgs::MagneticField mag1_msg;
                 mag1_msg.header.stamp = current_time;
@@ -151,6 +159,7 @@ int main(int argc, char** argv)
                 mag1_msg.magnetic_field.y = imu1_mag_y;
                 mag1_msg.magnetic_field.z = imu1_mag_z;
                 mag1_pub.publish(mag1_msg);
+                //ROS_DEBUG("Published MAG1 data");  // 添加发布日志
 
                 //The following code is commented out because the GPS data is not used in this example
                 // 由于本示例中未使用 GPS 数据，以下代码被注释掉
@@ -169,8 +178,8 @@ int main(int argc, char** argv)
             }
         }
 
+        // 保留spinOnce调用
         ros::spinOnce();
-        loop_rate.sleep();
     }
 
     serial_port.close();
