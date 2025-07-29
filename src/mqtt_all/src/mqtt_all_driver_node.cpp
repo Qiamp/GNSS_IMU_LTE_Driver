@@ -299,7 +299,7 @@ int main(int argc, char **argv) {
     ros::Subscriber gnss_sub = nh.subscribe<sensor_msgs::NavSatFix>("/ublox_driver/receiver_lla", 10, gnssCallback);
 
     // 定时器，用于定时发送综合数据
-    ros::Timer timer = nh.createTimer(ros::Duration(0.1), [&serial_port, mqtt_topic](const ros::TimerEvent &) {
+    ros::Timer timer = nh.createTimer(ros::Duration(0.01), [&serial_port, mqtt_topic](const ros::TimerEvent &) {
         publishCombinedData(serial_port, mqtt_topic);
     });
     

@@ -4,7 +4,7 @@
 online: 1           # input from serial port(1) or file(0)
 ## if `online == 1` then following options may be set
 input_serial_port: "/dev/ttyACM1"
-serial_baud_rate: 921600
+serial_baud_rate: 9600
 input_rtcm: 0       # whether input RTCM data to receiver for RTK solution
 rtcm_tcp_port: 3503
 config_receiver_at_start: 0     # whether to config receiver during booting, ** NOT SUPPORT YET **

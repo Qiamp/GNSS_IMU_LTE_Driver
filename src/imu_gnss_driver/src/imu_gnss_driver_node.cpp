@@ -56,7 +56,7 @@ int main(int argc, char** argv)
     ros::Publisher imu1_pub = nh.advertise<sensor_msgs::Imu>("imu1/data", 10);
     ros::Publisher mag0_pub = nh.advertise<sensor_msgs::MagneticField>("imu0/mag", 10);
     ros::Publisher mag1_pub = nh.advertise<sensor_msgs::MagneticField>("imu1/mag", 10);
-    // ros::Publisher gps_pub  = nh.advertise<sensor_msgs::NavSatFix>("gps/fix", 10);
+    ros::Publisher gps_pub  = nh.advertise<sensor_msgs::NavSatFix>("gps/fix", 10);
 
     // 移除固定频率循环，改为依靠串口数据驱动
     //ros::Rate loop_rate(100);
@@ -65,7 +65,7 @@ int main(int argc, char** argv)
         // 等待直到有数据可读
         if (serial_port.available()) {
             // Read one line (adjust buffer size and line delimiter as per device requirements) // 读取一行数据（依据设备实际情况，调整缓冲区大小和行结束符）
-            std::string line = serial_port.readline(1024, "\n");
+            std::string line = serial_port.readline(1024, "\r\n");
             if (line.empty()) {
                 ros::spinOnce();
                 continue;
@@ -112,9 +112,9 @@ int main(int argc, char** argv)
                 //The GPS Output is relying on the gnss_driver package
                 // 由于本示例中未使用 GPS 数据，以下代码被注释掉
                 // GPS 输出依赖于 gnss_driver 包
-                // double gps_long = std::stod(tokens[18]);
-                // double gps_lat  = std::stod(tokens[19]);
-                // double gps_alt  = std::stod(tokens[20]);
+                double gps_long = std::stod(tokens[18]);
+                double gps_lat  = std::stod(tokens[19]);
+                double gps_alt  = std::stod(tokens[20]);
 
                 ros::Time current_time = ros::Time::now();
 
@@ -165,13 +165,13 @@ int main(int argc, char** argv)
                 // 由于本示例中未使用 GPS 数据，以下代码被注释掉
                 //The GPS Output is relying on the gnss_driver package
                 // GPS 输出依赖于 gnss_driver 包
-                // sensor_msgs::NavSatFix gps_msg;
-                // gps_msg.header.stamp = current_time;
-                // gps_msg.header.frame_id = "gps_link";
-                // gps_msg.longitude = gps_long;
-                // gps_msg.latitude  = gps_lat;
-                // gps_msg.altitude  = gps_alt;
-                // gps_pub.publish(gps_msg);
+                sensor_msgs::NavSatFix gps_msg;
+                gps_msg.header.stamp = current_time;
+                gps_msg.header.frame_id = "gps_link";
+                gps_msg.longitude = gps_long;
+                gps_msg.latitude  = gps_lat;
+                gps_msg.altitude  = gps_alt;
+                gps_pub.publish(gps_msg);
 
             } catch (std::exception &e) {
                 ROS_ERROR_STREAM("Data parsing error: " << e.what()); //Data parsing error //数据解析错误

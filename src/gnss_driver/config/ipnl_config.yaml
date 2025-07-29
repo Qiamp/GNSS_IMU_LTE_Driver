@@ -3,14 +3,14 @@
 # input options
 online: 1           # input from serial port(1) or file(0)
 ## if `online == 1` then following options may be set
-input_serial_port: "/dev/ttyACM0"
-serial_baud_rate: 921600
+input_serial_port: "/dev/ttyACM1"
+serial_baud_rate: 9600
 input_rtcm: 0       # whether input RTCM data to receiver for RTK solution
 rtcm_tcp_port: 3503
 config_receiver_at_start: 0     # whether to config receiver during booting, ** NOT SUPPORT YET **
 receiver_config_filepath: "~/catkin_ws/src/ublox_driver/config/ublox_rcv_config.yaml"
 ## if `online == 0` then following options may be set, `serial_baud_rate` is used for speed control
-ubx_filepath: "/media/aae/update-usb/data/20231226-taipei/2/obs/231226_040300.ubx"
+ubx_filepath: "~/Data/"
 rtk_correction_ecef:      # apply RTK correction in case of the position of base station reported in RTCM is biased
     rows: 3
     cols: 1
