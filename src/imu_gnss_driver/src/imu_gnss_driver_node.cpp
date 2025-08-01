@@ -8,6 +8,17 @@
 #include <vector>
 #include "imu_gnss_driver/imu_gnss_driver.h"
 
+// 全局变量存储最新的GPS时间戳
+ros::Time latest_gps_timestamp;
+bool gps_timestamp_received = false;
+
+// GPS消息回调函数
+void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr& msg)
+{
+    latest_gps_timestamp = msg->header.stamp;
+    gps_timestamp_received = true;
+}
+
 // Implement splitString function // 实现 splitString 函数
 std::vector<std::string> splitString(const std::string &s, char delimiter)
 {
@@ -25,6 +36,7 @@ int main(int argc, char** argv)
     ros::init(argc, argv, "imu_gnss_driver_node");
     // Use private namespace, load parameters from external config file // 使用私有命名空间，通过外部config文件加载参数
     ros::NodeHandle nh("imu_gnss_driver");
+    ros::NodeHandle nh_global; // 用于订阅全局话题
 
     // Retrieve serial port and baudrate from the parameter server // 从参数服务器获取串口号与波特率
     std::string port;
@@ -57,6 +69,9 @@ int main(int argc, char** argv)
     ros::Publisher mag0_pub = nh.advertise<sensor_msgs::MagneticField>("imu0/mag", 10);
     ros::Publisher mag1_pub = nh.advertise<sensor_msgs::MagneticField>("imu1/mag", 10);
     ros::Publisher gps_pub  = nh.advertise<sensor_msgs::NavSatFix>("gps/fix", 10);
+
+    // 订阅GPS话题以获取时间戳
+    ros::Subscriber gps_sub = nh_global.subscribe("/ublox_driver/receiver_lla", 10, gpsCallback);
 
     // 移除固定频率循环，改为依靠串口数据驱动
     //ros::Rate loop_rate(100);
@@ -117,10 +132,12 @@ int main(int argc, char** argv)
                 double gps_alt  = std::stod(tokens[20]);
 
                 ros::Time current_time = ros::Time::now();
+                // 如果收到GPS时间戳，则使用GPS时间戳，否则使用当前时间
+                ros::Time sensor_timestamp = gps_timestamp_received ? latest_gps_timestamp : current_time;
 
                 // 为每个传感器创建并发布消息
                 sensor_msgs::Imu imu0_msg;
-                imu0_msg.header.stamp = current_time;
+                imu0_msg.header.stamp = sensor_timestamp;
                 imu0_msg.header.frame_id = "imu0_link";
                 imu0_msg.linear_acceleration.x = imu0_accel_x;
                 imu0_msg.linear_acceleration.y = imu0_accel_y;
@@ -132,7 +149,7 @@ int main(int argc, char** argv)
                 //ROS_DEBUG("Published IMU0 data");  // 添加发布日志
 
                 sensor_msgs::Imu imu1_msg;
-                imu1_msg.header.stamp = current_time;
+                imu1_msg.header.stamp = sensor_timestamp;
                 imu1_msg.header.frame_id = "imu1_link";
                 imu1_msg.linear_acceleration.x = imu1_accel_x;
                 imu1_msg.linear_acceleration.y = imu1_accel_y;
@@ -144,7 +161,7 @@ int main(int argc, char** argv)
                 //ROS_DEBUG("Published IMU1 data");  // 添加发布日志
 
                 sensor_msgs::MagneticField mag0_msg;
-                mag0_msg.header.stamp = current_time;
+                mag0_msg.header.stamp = sensor_timestamp;
                 mag0_msg.header.frame_id = "imu0_link";
                 mag0_msg.magnetic_field.x = imu0_mag_x;
                 mag0_msg.magnetic_field.y = imu0_mag_y;
@@ -153,7 +170,7 @@ int main(int argc, char** argv)
                 //ROS_DEBUG("Published MAG0 data");  // 添加发布日志
 
                 sensor_msgs::MagneticField mag1_msg;
-                mag1_msg.header.stamp = current_time;
+                mag1_msg.header.stamp = sensor_timestamp;
                 mag1_msg.header.frame_id = "imu1_link";
                 mag1_msg.magnetic_field.x = imu1_mag_x;
                 mag1_msg.magnetic_field.y = imu1_mag_y;
