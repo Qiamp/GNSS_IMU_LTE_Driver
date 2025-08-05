@@ -11,12 +11,20 @@
 // 全局变量存储最新的GPS时间戳
 ros::Time latest_gps_timestamp;
 bool gps_timestamp_received = false;
+// 添加时间偏移变量
+ros::Duration time_offset(0.0);
+bool time_offset_calculated = false;
 
 // GPS消息回调函数
 void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr& msg)
 {
     latest_gps_timestamp = msg->header.stamp;
     gps_timestamp_received = true;
+    
+    // 计算时间偏移
+    ros::Time current_time = ros::Time::now();
+    time_offset = latest_gps_timestamp - current_time;
+    time_offset_calculated = true;
 }
 
 // Implement splitString function // 实现 splitString 函数
@@ -132,12 +140,15 @@ int main(int argc, char** argv)
                 double gps_alt  = std::stod(tokens[20]);
 
                 ros::Time current_time = ros::Time::now();
-                // 如果收到GPS时间戳，则使用GPS时间戳，否则使用当前时间
-                ros::Time sensor_timestamp = gps_timestamp_received ? latest_gps_timestamp : current_time;
+                // 计算修正后的时间戳
+                ros::Time corrected_timestamp = current_time;
+                if (time_offset_calculated) {
+                    corrected_timestamp = current_time + time_offset;
+                }
 
                 // 为每个传感器创建并发布消息
                 sensor_msgs::Imu imu0_msg;
-                imu0_msg.header.stamp = sensor_timestamp;
+                imu0_msg.header.stamp = corrected_timestamp; // 使用修正后的时间戳
                 imu0_msg.header.frame_id = "imu0_link";
                 imu0_msg.linear_acceleration.x = imu0_accel_x;
                 imu0_msg.linear_acceleration.y = imu0_accel_y;
@@ -146,10 +157,10 @@ int main(int argc, char** argv)
                 imu0_msg.angular_velocity.y = imu0_gyro_y;
                 imu0_msg.angular_velocity.z = imu0_gyro_z;
                 imu0_pub.publish(imu0_msg);
-                //ROS_DEBUG("Published IMU0 data");  // 添加发布日志
+                ROS_INFO("Published IMU0 data");  // 添加发布日志
 
                 sensor_msgs::Imu imu1_msg;
-                imu1_msg.header.stamp = sensor_timestamp;
+                imu1_msg.header.stamp = corrected_timestamp; // 使用修正后的时间戳
                 imu1_msg.header.frame_id = "imu1_link";
                 imu1_msg.linear_acceleration.x = imu1_accel_x;
                 imu1_msg.linear_acceleration.y = imu1_accel_y;
@@ -158,32 +169,32 @@ int main(int argc, char** argv)
                 imu1_msg.angular_velocity.y = imu1_gyro_y;
                 imu1_msg.angular_velocity.z = imu1_gyro_z;
                 imu1_pub.publish(imu1_msg);
-                //ROS_DEBUG("Published IMU1 data");  // 添加发布日志
+                ROS_INFO("Published IMU1 data");  // 添加发布日志
 
                 sensor_msgs::MagneticField mag0_msg;
-                mag0_msg.header.stamp = sensor_timestamp;
+                mag0_msg.header.stamp = corrected_timestamp; // 使用修正后的时间戳
                 mag0_msg.header.frame_id = "imu0_link";
                 mag0_msg.magnetic_field.x = imu0_mag_x;
                 mag0_msg.magnetic_field.y = imu0_mag_y;
                 mag0_msg.magnetic_field.z = imu0_mag_z;
                 mag0_pub.publish(mag0_msg);
-                //ROS_DEBUG("Published MAG0 data");  // 添加发布日志
+                ROS_INFO("Published MAG0 data");  // 添加发布日志
 
                 sensor_msgs::MagneticField mag1_msg;
-                mag1_msg.header.stamp = sensor_timestamp;
+                mag1_msg.header.stamp = corrected_timestamp; // 使用修正后的时间戳
                 mag1_msg.header.frame_id = "imu1_link";
                 mag1_msg.magnetic_field.x = imu1_mag_x;
                 mag1_msg.magnetic_field.y = imu1_mag_y;
                 mag1_msg.magnetic_field.z = imu1_mag_z;
                 mag1_pub.publish(mag1_msg);
-                //ROS_DEBUG("Published MAG1 data");  // 添加发布日志
+                ROS_INFO("Published MAG1 data");  // 添加发布日志
 
                 //The following code is commented out because the GPS data is not used in this example
                 // 由于本示例中未使用 GPS 数据，以下代码被注释掉
                 //The GPS Output is relying on the gnss_driver package
                 // GPS 输出依赖于 gnss_driver 包
                 sensor_msgs::NavSatFix gps_msg;
-                gps_msg.header.stamp = current_time;
+                gps_msg.header.stamp = current_time; // 使用当前时间戳
                 gps_msg.header.frame_id = "gps_link";
                 gps_msg.longitude = gps_long;
                 gps_msg.latitude  = gps_lat;
