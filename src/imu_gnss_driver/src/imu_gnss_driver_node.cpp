@@ -3,6 +3,7 @@
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/MagneticField.h>
 #include <sensor_msgs/NavSatFix.h>
+#include <gnss_comm/GnssPVTSolnMsg.h>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -16,15 +17,34 @@ ros::Duration time_offset(0.0);
 bool time_offset_calculated = false;
 
 // GPS消息回调函数
-void gpsCallback(const sensor_msgs::NavSatFix::ConstPtr& msg)
+void gpsCallback(const gnss_comm::GnssPVTSolnMsg::ConstPtr& msg)
 {
-    latest_gps_timestamp = msg->header.stamp;
+    // 从GNSS PVT消息中提取时间信息
+    // GNSS时间通常包含GPS周数和周内秒数
+    uint32_t gps_week = msg->time.week;
+    double gps_tow = msg->time.tow; // 周内秒数
+    
+    // GPS时间起始点：1980年1月6日 00:00:00 UTC
+    // 计算GPS时间对应的UTC时间
+    const int64_t GPS_EPOCH_UNIX = 315964800; // GPS epoch in Unix time (1980-01-06 00:00:00)
+    const int64_t SECONDS_PER_WEEK = 604800;
+    
+    // 计算UTC时间（不考虑闰秒，这里简化处理）
+    int64_t utc_seconds = GPS_EPOCH_UNIX + gps_week * SECONDS_PER_WEEK + (int64_t)gps_tow;
+    double fractional_seconds = gps_tow - (int64_t)gps_tow;
+    
+    // 转换为ROS时间
+    latest_gps_timestamp = ros::Time(utc_seconds, fractional_seconds * 1e9);
     gps_timestamp_received = true;
     
     // 计算时间偏移
     ros::Time current_time = ros::Time::now();
     time_offset = latest_gps_timestamp - current_time;
     time_offset_calculated = true;
+    
+    ROS_DEBUG_STREAM("GPS Week: " << gps_week << ", TOW: " << gps_tow 
+                     << ", UTC timestamp: " << latest_gps_timestamp 
+                     << ", Time offset: " << time_offset.toSec() << "s");
 }
 
 // Implement splitString function // 实现 splitString 函数
@@ -79,7 +99,7 @@ int main(int argc, char** argv)
     ros::Publisher gps_pub  = nh.advertise<sensor_msgs::NavSatFix>("gps/fix", 10);
 
     // 订阅GPS话题以获取时间戳
-    ros::Subscriber gps_sub = nh_global.subscribe("/ublox_driver/receiver_lla", 10, gpsCallback);
+    ros::Subscriber gps_sub = nh_global.subscribe("/ublox_driver/receiver_pvt", 10, gpsCallback);
 
     // 移除固定频率循环，改为依靠串口数据驱动
     //ros::Rate loop_rate(100);

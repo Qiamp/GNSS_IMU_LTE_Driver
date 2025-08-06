@@ -5,6 +5,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
   std_msgs
+  gnss_comm
 )
 
 find_package(serial REQUIRED)
