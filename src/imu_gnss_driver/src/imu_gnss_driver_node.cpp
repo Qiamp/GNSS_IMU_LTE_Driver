@@ -29,8 +29,11 @@ void gpsCallback(const gnss_comm::GnssPVTSolnMsg::ConstPtr& msg)
     const int64_t GPS_EPOCH_UNIX = 315964800; // GPS epoch in Unix time (1980-01-06 00:00:00)
     const int64_t SECONDS_PER_WEEK = 604800;
     
-    // 计算UTC时间（不考虑闰秒，这里简化处理）
-    int64_t utc_seconds = GPS_EPOCH_UNIX + gps_week * SECONDS_PER_WEEK + (int64_t)gps_tow;
+    // 2025年GPS与UTC之间的闰秒差值（GPS时间比UTC快18秒）
+    const int GPS_UTC_LEAP_SECONDS = 18;
+    
+    // 计算UTC时间（加入闰秒修正）
+    int64_t utc_seconds = GPS_EPOCH_UNIX + gps_week * SECONDS_PER_WEEK + (int64_t)gps_tow - GPS_UTC_LEAP_SECONDS;
     double fractional_seconds = gps_tow - (int64_t)gps_tow;
     
     // 转换为ROS时间
