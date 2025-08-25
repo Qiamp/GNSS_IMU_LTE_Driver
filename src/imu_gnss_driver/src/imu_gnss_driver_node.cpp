@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 #include "imu_gnss_driver/imu_gnss_driver.h"
+#include <ros/console.h>
+#include <map>
 
 // 全局变量存储最新的GPS时间戳
 ros::Time latest_gps_timestamp;
@@ -60,6 +62,22 @@ std::vector<std::string> splitString(const std::string &s, char delimiter)
         tokens.push_back(token);
     }
     return tokens;
+}
+
+// 添加频率统计相关变量
+std::map<std::string, ros::Time> last_publish_time;
+std::map<std::string, int> message_count;
+
+// 计算并打印频率的函数
+void calculateAndLogFrequency(const std::string& topic_name) {
+    ros::Time now = ros::Time::now();
+    if (last_publish_time.find(topic_name) != last_publish_time.end()) {
+        ros::Duration duration = now - last_publish_time[topic_name];
+        double frequency = 1.0 / duration.toSec();
+        ROS_INFO_STREAM("Topic [" << topic_name << "] frequency: " << frequency << " Hz");
+    }
+    last_publish_time[topic_name] = now;
+    message_count[topic_name]++;
 }
 
 int main(int argc, char** argv)
@@ -180,7 +198,8 @@ int main(int argc, char** argv)
                 imu0_msg.angular_velocity.y = imu0_gyro_y;
                 imu0_msg.angular_velocity.z = imu0_gyro_z;
                 imu0_pub.publish(imu0_msg);
-                ROS_INFO("Published IMU0 data");  // 添加发布日志
+                calculateAndLogFrequency("imu0/data"); // 统计 imu0/data 的发布频率
+                // ROS_INFO("Published IMU0 data");  // 添加发布日志
 
                 sensor_msgs::Imu imu1_msg;
                 imu1_msg.header.stamp = corrected_timestamp; // 使用修正后的时间戳
@@ -192,7 +211,8 @@ int main(int argc, char** argv)
                 imu1_msg.angular_velocity.y = imu1_gyro_y;
                 imu1_msg.angular_velocity.z = imu1_gyro_z;
                 imu1_pub.publish(imu1_msg);
-                ROS_INFO("Published IMU1 data");  // 添加发布日志
+                calculateAndLogFrequency("imu1/data"); // 统计 imu1/data 的发布频率
+                // ROS_INFO("Published IMU1 data");  // 添加发布日志
 
                 sensor_msgs::MagneticField mag0_msg;
                 mag0_msg.header.stamp = corrected_timestamp; // 使用修正后的时间戳
@@ -201,7 +221,8 @@ int main(int argc, char** argv)
                 mag0_msg.magnetic_field.y = imu0_mag_y;
                 mag0_msg.magnetic_field.z = imu0_mag_z;
                 mag0_pub.publish(mag0_msg);
-                ROS_INFO("Published MAG0 data");  // 添加发布日志
+                calculateAndLogFrequency("imu0/mag"); // 统计 imu0/mag 的发布频率
+                // ROS_INFO("Published MAG0 data");  // 添加发布日志
 
                 sensor_msgs::MagneticField mag1_msg;
                 mag1_msg.header.stamp = corrected_timestamp; // 使用修正后的时间戳
@@ -210,7 +231,8 @@ int main(int argc, char** argv)
                 mag1_msg.magnetic_field.y = imu1_mag_y;
                 mag1_msg.magnetic_field.z = imu1_mag_z;
                 mag1_pub.publish(mag1_msg);
-                ROS_INFO("Published MAG1 data");  // 添加发布日志
+                calculateAndLogFrequency("imu1/mag"); // 统计 imu1/mag 的发布频率
+                // ROS_INFO("Published MAG1 data");  // 添加发布日志
 
                 //The following code is commented out because the GPS data is not used in this example
                 // 由于本示例中未使用 GPS 数据，以下代码被注释掉
