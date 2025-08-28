@@ -20,6 +20,9 @@ sudo apt install libfmt-dev ros-noetic-paho-mqtt-cpp ros-noetic-paho-mqtt-c
 sudo apt-get install libwebsocketpp-dev libjsoncpp-dev
 
 # 编译工作空间
+先编译gnss_comm
+catkin build gnss_comm
+完整编译
 catkin build
 ```
 
