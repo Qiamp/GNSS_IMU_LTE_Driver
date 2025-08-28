@@ -20,9 +20,9 @@ sudo apt install libfmt-dev ros-noetic-paho-mqtt-cpp ros-noetic-paho-mqtt-c
 sudo apt-get install libwebsocketpp-dev libjsoncpp-dev
 
 # 编译工作空间
-先编译gnss_comm
+#先编译gnss_comm
 catkin build gnss_comm
-完整编译
+#完整编译
 catkin build
 ```
 
@@ -36,7 +36,10 @@ catkin build
 ### 3. 启动节点
 使用对应的 launch 文件启动节点：
 ```bash
-roslaunch <包名称> <启动文件>.launch
+cd ~/GNSS_IMU_LTE_Driver
+source ~/GNSS_IMU_LTE_Driver/devel/setup.bash
+roslaunch imu_gnss_driver imu_gnss_driver.launch
+roslaunch ublox_driver ublox_driver.launch
 ```
 
 ### 4. MQTT 监控
