@@ -64,20 +64,38 @@ std::vector<std::string> splitString(const std::string &s, char delimiter)
     return tokens;
 }
 
-// 添加频率统计相关变量
-std::map<std::string, ros::Time> last_publish_time;
-std::map<std::string, int> message_count;
+// 频率统计相关变量
+std::map<std::string, ros::Time> window_start_time;
+std::map<std::string, int> message_count_in_window;
+std::map<std::string, double> last_calculated_frequency;
 
-// 计算并打印频率的函数
+// 频率计算函数 - 基于1秒窗口内的消息计数
 void calculateAndLogFrequency(const std::string& topic_name) {
     ros::Time now = ros::Time::now();
-    if (last_publish_time.find(topic_name) != last_publish_time.end()) {
-        ros::Duration duration = now - last_publish_time[topic_name];
-        double frequency = 1.0 / duration.toSec();
-        ROS_INFO_STREAM("Topic [" << topic_name << "] frequency: " << frequency << " Hz");
+    
+    // 初始化窗口开始时间
+    if (window_start_time.find(topic_name) == window_start_time.end()) {
+        window_start_time[topic_name] = now;
+        message_count_in_window[topic_name] = 0;
     }
-    last_publish_time[topic_name] = now;
-    message_count[topic_name]++;
+    
+    // 增加当前窗口内的消息计数
+    message_count_in_window[topic_name]++;
+    
+    // 检查是否已经过了1秒
+    ros::Duration elapsed = now - window_start_time[topic_name];
+    if (elapsed.toSec() >= 1.0) {
+        // 计算频率
+        double frequency = message_count_in_window[topic_name] / elapsed.toSec();
+        last_calculated_frequency[topic_name] = frequency;
+        
+        ROS_INFO_STREAM("Topic [" << topic_name << "] frequency: " << frequency << " Hz (messages in " 
+                        << elapsed.toSec() << "s: " << message_count_in_window[topic_name] << ")");
+        
+        // 重置窗口
+        window_start_time[topic_name] = now;
+        message_count_in_window[topic_name] = 0;
+    }
 }
 
 int main(int argc, char** argv)
@@ -117,7 +135,7 @@ int main(int argc, char** argv)
     ros::Publisher imu1_pub = nh.advertise<sensor_msgs::Imu>("imu1/data", 10);
     ros::Publisher mag0_pub = nh.advertise<sensor_msgs::MagneticField>("imu0/mag", 10);
     ros::Publisher mag1_pub = nh.advertise<sensor_msgs::MagneticField>("imu1/mag", 10);
-    ros::Publisher gps_pub  = nh.advertise<sensor_msgs::NavSatFix>("gps/fix", 10);
+    // ros::Publisher gps_pub  = nh.advertise<sensor_msgs::NavSatFix>("gps/fix", 10);
 
     // 订阅GPS话题以获取时间戳
     ros::Subscriber gps_sub = nh_global.subscribe("/ublox_driver/receiver_pvt", 10, gpsCallback);
@@ -134,6 +152,9 @@ int main(int argc, char** argv)
                 ros::spinOnce();
                 continue;
             }
+
+            // 统计串口接收数据的频率
+            calculateAndLogFrequency("serial_data_received");
 
             // Data format:  
             // imu0_accel_x,imu1_accel_x,imu0_accel_y,imu1_accel_y,imu0_accel_z,imu1_accel_z,
@@ -211,7 +232,7 @@ int main(int argc, char** argv)
                 imu1_msg.angular_velocity.y = imu1_gyro_y;
                 imu1_msg.angular_velocity.z = imu1_gyro_z;
                 imu1_pub.publish(imu1_msg);
-                calculateAndLogFrequency("imu1/data"); // 统计 imu1/data 的发布频率
+                // calculateAndLogFrequency("imu1/data"); // 统计 imu1/data 的发布频率
                 // ROS_INFO("Published IMU1 data");  // 添加发布日志
 
                 sensor_msgs::MagneticField mag0_msg;
@@ -221,7 +242,7 @@ int main(int argc, char** argv)
                 mag0_msg.magnetic_field.y = imu0_mag_y;
                 mag0_msg.magnetic_field.z = imu0_mag_z;
                 mag0_pub.publish(mag0_msg);
-                calculateAndLogFrequency("imu0/mag"); // 统计 imu0/mag 的发布频率
+                // calculateAndLogFrequency("imu0/mag"); // 统计 imu0/mag 的发布频率
                 // ROS_INFO("Published MAG0 data");  // 添加发布日志
 
                 sensor_msgs::MagneticField mag1_msg;
@@ -231,20 +252,20 @@ int main(int argc, char** argv)
                 mag1_msg.magnetic_field.y = imu1_mag_y;
                 mag1_msg.magnetic_field.z = imu1_mag_z;
                 mag1_pub.publish(mag1_msg);
-                calculateAndLogFrequency("imu1/mag"); // 统计 imu1/mag 的发布频率
+                // calculateAndLogFrequency("imu1/mag"); // 统计 imu1/mag 的发布频率
                 // ROS_INFO("Published MAG1 data");  // 添加发布日志
 
                 //The following code is commented out because the GPS data is not used in this example
                 // 由于本示例中未使用 GPS 数据，以下代码被注释掉
                 //The GPS Output is relying on the gnss_driver package
                 // GPS 输出依赖于 gnss_driver 包
-                sensor_msgs::NavSatFix gps_msg;
-                gps_msg.header.stamp = current_time; // 使用当前时间戳
-                gps_msg.header.frame_id = "gps_link";
-                gps_msg.longitude = gps_long;
-                gps_msg.latitude  = gps_lat;
-                gps_msg.altitude  = gps_alt;
-                gps_pub.publish(gps_msg);
+                // sensor_msgs::NavSatFix gps_msg;
+                // gps_msg.header.stamp = current_time; // 使用当前时间戳
+                // gps_msg.header.frame_id = "gps_link";
+                // gps_msg.longitude = gps_long;
+                // gps_msg.latitude  = gps_lat;
+                // gps_msg.altitude  = gps_alt;
+                // gps_pub.publish(gps_msg);
 
             } catch (std::exception &e) {
                 ROS_ERROR_STREAM("Data parsing error: " << e.what()); //Data parsing error //数据解析错误

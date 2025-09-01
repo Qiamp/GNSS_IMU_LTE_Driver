@@ -1,2 +1,2 @@
 port: "/dev/ttyACM0"
-baudrate: 115200
+baudrate: 921600
