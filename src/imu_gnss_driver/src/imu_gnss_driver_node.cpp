@@ -1,5 +1,11 @@
 #include <ros/ros.h>
-#include <serial/serial.h>
+// 移除serial库，添加Linux原生串口头文件
+#include <termios.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/select.h>
+#include <errno.h>
+#include <cstring>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/MagneticField.h>
 #include <sensor_msgs/NavSatFix.h>
@@ -98,6 +104,159 @@ void calculateAndLogFrequency(const std::string& topic_name) {
     }
 }
 
+// 串口类定义
+class SerialPort {
+private:
+    int fd_;
+    std::string port_;
+    int baudrate_;
+    
+    int getBaudrateConstant(int baudrate) {
+        switch(baudrate) {
+            case 9600: return B9600;
+            case 19200: return B19200;
+            case 38400: return B38400;
+            case 57600: return B57600;
+            case 115200: return B115200;
+            case 230400: return B230400;
+            case 460800: return B460800;
+            case 921600: return B921600;
+            default: return B115200;
+        }
+    }
+    
+public:
+    SerialPort() : fd_(-1) {}
+    
+    ~SerialPort() {
+        close();
+    }
+    
+    bool open(const std::string& port, int baudrate) {
+        port_ = port;
+        baudrate_ = baudrate;
+        
+        // 打开串口
+        fd_ = ::open(port.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
+        if (fd_ < 0) {
+            ROS_ERROR_STREAM("无法打开串口 " << port << ": " << strerror(errno));
+            return false;
+        }
+        
+        // 配置串口参数
+        struct termios tty;
+        if (tcgetattr(fd_, &tty) != 0) {
+            ROS_ERROR_STREAM("获取串口属性失败: " << strerror(errno));
+            ::close(fd_);
+            fd_ = -1;
+            return false;
+        }
+        
+        // 设置波特率
+        int baud_const = getBaudrateConstant(baudrate);
+        cfsetospeed(&tty, baud_const);
+        cfsetispeed(&tty, baud_const);
+        
+        // 8N1配置
+        tty.c_cflag &= ~PARENB;        // 无奇偶校验
+        tty.c_cflag &= ~CSTOPB;        // 1个停止位
+        tty.c_cflag &= ~CSIZE;         // 清除数据位设置
+        tty.c_cflag |= CS8;            // 8个数据位
+        tty.c_cflag &= ~CRTSCTS;       // 禁用硬件流控制
+        tty.c_cflag |= CREAD | CLOCAL; // 启用接收器，忽略调制解调器控制线
+        
+        // 原始输入模式
+        tty.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+        tty.c_iflag &= ~(IXON | IXOFF | IXANY); // 禁用软件流控制
+        tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+        
+        // 原始输出模式
+        tty.c_oflag &= ~OPOST;
+        
+        // 设置超时
+        tty.c_cc[VTIME] = 10;    // 1秒超时
+        tty.c_cc[VMIN] = 0;      // 非阻塞读取
+        
+        // 应用设置
+        if (tcsetattr(fd_, TCSANOW, &tty) != 0) {
+            ROS_ERROR_STREAM("设置串口属性失败: " << strerror(errno));
+            ::close(fd_);
+            fd_ = -1;
+            return false;
+        }
+        
+        // 清空缓冲区
+        tcflush(fd_, TCIOFLUSH);
+        
+        return true;
+    }
+    
+    void close() {
+        if (fd_ >= 0) {
+            ::close(fd_);
+            fd_ = -1;
+        }
+    }
+    
+    bool isOpen() const {
+        return fd_ >= 0;
+    }
+    
+    bool available() {
+        if (fd_ < 0) return false;
+        
+        fd_set readfds;
+        struct timeval timeout;
+        
+        FD_ZERO(&readfds);
+        FD_SET(fd_, &readfds);
+        
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 1000; // 1ms超时
+        
+        int result = select(fd_ + 1, &readfds, NULL, NULL, &timeout);
+        return (result > 0 && FD_ISSET(fd_, &readfds));
+    }
+    
+    std::string readline(size_t max_size = 1024, const std::string& eol = "\r\n") {
+        if (fd_ < 0) return "";
+        
+        std::string line;
+        char buffer[1];
+        
+        while (line.length() < max_size) {
+            ssize_t bytes_read = read(fd_, buffer, 1);
+            if (bytes_read <= 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    // 非阻塞模式下无数据可读
+                    usleep(1000); // 等待1ms
+                    continue;
+                } else {
+                    // 读取错误
+                    break;
+                }
+            }
+            
+            line += buffer[0];
+            
+            // 检查行结束符
+            if (eol.find(buffer[0]) != std::string::npos) {
+                // 找到行结束符，检查是否是完整的结束符
+                if (line.length() >= eol.length()) {
+                    std::string line_end = line.substr(line.length() - eol.length());
+                    if (line_end == eol) {
+                        // 移除行结束符并返回
+                        line = line.substr(0, line.length() - eol.length());
+                        return line;
+                    }
+                }
+            }
+        }
+        
+        return line;
+    }
+};
+
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "imu_gnss_driver_node");
@@ -111,24 +270,18 @@ int main(int argc, char** argv)
     nh.param<std::string>("port", port, "/dev/ttyUSB0");
     nh.param<int>("baudrate", baudrate, 115200);
 
-    // Initialize the serial port // 初始化串口
-    serial::Serial serial_port;
-    try {
-        serial_port.setPort(port);
-        serial_port.setBaudrate(baudrate);
-        serial::Timeout timeout = serial::Timeout::simpleTimeout(1000);
-        serial_port.setTimeout(timeout);
-        serial_port.open();
-    } catch (serial::IOException &e) {
-        ROS_ERROR_STREAM("Unable to open serial port " << port); // 无法打开串口
+    // 使用自定义串口类替换serial::Serial
+    SerialPort serial_port;
+    if (!serial_port.open(port, baudrate)) {
+        ROS_ERROR_STREAM("无法打开串口 " << port);
         return -1;
     }
 
     if (!serial_port.isOpen()) {
-        ROS_ERROR_STREAM("Serial port " << port << " failed to open"); // 串口未成功打开
+        ROS_ERROR_STREAM("串口 " << port << " 未成功打开");
         return -1;
     }
-    ROS_INFO_STREAM("Serial port " << port << " opened successfully, baudrate: " << baudrate); // 串口已打开，波特率
+    ROS_INFO_STREAM("串口 " << port << " 已打开，波特率: " << baudrate);
 
     // Create topic publishers // 建立各主题的发布器
     ros::Publisher imu0_pub = nh.advertise<sensor_msgs::Imu>("imu0/data", 10);
@@ -146,7 +299,7 @@ int main(int argc, char** argv)
     {
         // 等待直到有数据可读
         if (serial_port.available()) {
-            // Read one line (adjust buffer size and line delimiter as per device requirements) // 读取一行数据（依据设备实际情况，调整缓冲区大小和行结束符）
+            // 读取一行数据
             std::string line = serial_port.readline(1024, "\r\n");
             if (line.empty()) {
                 ros::spinOnce();
