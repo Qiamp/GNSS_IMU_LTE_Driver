@@ -139,14 +139,14 @@ public:
         // 打开串口
         fd_ = ::open(port.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
         if (fd_ < 0) {
-            ROS_ERROR_STREAM("无法打开串口 " << port << ": " << strerror(errno));
+            ROS_ERROR_STREAM("Open Serial Port Error " << port << ": " << strerror(errno));
             return false;
         }
         
         // 配置串口参数
         struct termios tty;
         if (tcgetattr(fd_, &tty) != 0) {
-            ROS_ERROR_STREAM("获取串口属性失败: " << strerror(errno));
+            ROS_ERROR_STREAM("Failed to get serial port attributes: " << strerror(errno));
             ::close(fd_);
             fd_ = -1;
             return false;
@@ -179,7 +179,7 @@ public:
         
         // 应用设置
         if (tcsetattr(fd_, TCSANOW, &tty) != 0) {
-            ROS_ERROR_STREAM("设置串口属性失败: " << strerror(errno));
+            ROS_ERROR_STREAM("Set Serial Port Attributes Error: " << strerror(errno));
             ::close(fd_);
             fd_ = -1;
             return false;
@@ -273,15 +273,15 @@ int main(int argc, char** argv)
     // 使用自定义串口类替换serial::Serial
     SerialPort serial_port;
     if (!serial_port.open(port, baudrate)) {
-        ROS_ERROR_STREAM("无法打开串口 " << port);
+        ROS_ERROR_STREAM("Open Serial Port Error " << port << ": " << strerror(errno));
         return -1;
     }
 
     if (!serial_port.isOpen()) {
-        ROS_ERROR_STREAM("串口 " << port << " 未成功打开");
+        ROS_ERROR_STREAM("Serial Port " << port << " Failed to Open");
         return -1;
     }
-    ROS_INFO_STREAM("串口 " << port << " 已打开，波特率: " << baudrate);
+    ROS_INFO_STREAM("Serial Port " << port << " Opened Successfully, Baudrate: " << baudrate);
 
     // Create topic publishers // 建立各主题的发布器
     ros::Publisher imu0_pub = nh.advertise<sensor_msgs::Imu>("imu0/data", 10);
