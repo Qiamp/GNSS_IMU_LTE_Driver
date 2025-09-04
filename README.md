@@ -32,6 +32,10 @@ catkin build
   - `imu_gnss_driver`：用于 STM32 设备
   - `gnss_driver`：用于 u-blox GNSS 模块
   - `mqtt_all`：用于 AT 指令通信
+- 串口号配置：
+  - 修改 `src/imu_gnss_driver/config/serial_params.yaml` 文件中的 `port` 字段
+  - 修改 `src/gnss_driver/config/ipnl_config.yaml` 文件中的 `input_serial_port` 字段
+  - 修改 `src/mqtt_all/config/serial_params.yaml` 文件中的 `port` 字段
 
 ### 3. 启动节点
 使用对应的 launch 文件启动节点：
