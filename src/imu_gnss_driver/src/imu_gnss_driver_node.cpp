@@ -16,6 +16,12 @@
 #include "imu_gnss_driver/imu_gnss_driver.h"
 #include <ros/console.h>
 #include <map>
+#include <algorithm>
+#include <cctype>
+
+namespace {
+constexpr double kDegToRad = 3.14159265358979323846 / 180.0;
+}
 
 // 全局变量存储最新的GPS时间戳
 ros::Time latest_gps_timestamp;
@@ -266,9 +272,24 @@ int main(int argc, char** argv)
 
     // Retrieve serial port and baudrate from the parameter server // 从参数服务器获取串口号与波特率
     std::string port;
+    std::string imu_gyro_unit;
     int baudrate;
     nh.param<std::string>("port", port, "/dev/ttyUSB0");
     nh.param<int>("baudrate", baudrate, 115200);
+    nh.param<std::string>("imu_gyro_unit", imu_gyro_unit, "rad");
+
+    std::transform(imu_gyro_unit.begin(), imu_gyro_unit.end(), imu_gyro_unit.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    bool gyro_unit_is_degree = false;
+    if (imu_gyro_unit == "deg" || imu_gyro_unit == "degree" || imu_gyro_unit == "degrees") {
+        gyro_unit_is_degree = true;
+    } else if (imu_gyro_unit == "rad" || imu_gyro_unit == "radian" || imu_gyro_unit == "radians") {
+        gyro_unit_is_degree = false;
+    } else {
+        ROS_WARN_STREAM("Invalid imu_gyro_unit: " << imu_gyro_unit
+                        << ", fallback to rad. Supported values: rad, deg");
+        imu_gyro_unit = "rad";
+    }
 
     // 使用自定义串口类替换serial::Serial
     SerialPort serial_port;
@@ -282,6 +303,8 @@ int main(int argc, char** argv)
         return -1;
     }
     ROS_INFO_STREAM("Serial Port " << port << " Opened Successfully, Baudrate: " << baudrate);
+    ROS_INFO_STREAM("IMU gyro input unit: " << imu_gyro_unit
+                    << ", publishing angular_velocity in rad/s");
 
     // Create topic publishers // 建立各主题的发布器
     ros::Publisher imu0_pub = nh.advertise<sensor_msgs::Imu>("imu0/data", 10);
@@ -338,6 +361,15 @@ int main(int argc, char** argv)
                 double imu1_gyro_y  = std::stod(tokens[9]);
                 double imu0_gyro_z  = std::stod(tokens[10]);
                 double imu1_gyro_z  = std::stod(tokens[11]);
+
+                if (gyro_unit_is_degree) {
+                    imu0_gyro_x *= kDegToRad;
+                    imu1_gyro_x *= kDegToRad;
+                    imu0_gyro_y *= kDegToRad;
+                    imu1_gyro_y *= kDegToRad;
+                    imu0_gyro_z *= kDegToRad;
+                    imu1_gyro_z *= kDegToRad;
+                }
 
                 double imu0_mag_x   = std::stod(tokens[12]);
                 double imu1_mag_x   = std::stod(tokens[13]);
