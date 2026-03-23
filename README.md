@@ -1,54 +1,57 @@
+[English](README.md) | [中文](README.zh-CN.md)
+
 # GNSS_IMU_LTE_Driver
 
-一个基于 ROS1 的多模块驱动工作区，用于接入 IMU、u-blox GNSS 和 LTE/MQTT 通信链路，并支持接收端回放与网页可视化。
+A ROS1-based multi-module workspace for integrating IMU, u-blox GNSS, and LTE/MQTT communication, with support for receiver-side replay and web visualization.
 
-项目当前主要覆盖两类场景：
+The project currently focuses on two typical scenarios:
 
-- 发送端：采集 IMU 与 GNSS 数据，通过串口 AT 指令驱动 LTE 模块并发布到 MQTT。
-- 接收端：从 MQTT Broker 订阅组合消息，还原为 ROS 话题，并通过 WebSocket 提供前端可视化数据。
+- Sender side: acquire IMU and GNSS data, then publish it to MQTT through an LTE module driven by serial AT commands.
+- Receiver side: subscribe to combined messages from an MQTT broker, reconstruct them as ROS topics, and expose data to a web frontend through WebSocket.
 
-## 项目结构
+## Project Structure
 
-核心包如下：
+Core packages:
 
-| 包名 | 作用 |
+| Package | Purpose |
 | --- | --- |
-| `imu_gnss_driver` | 从串口读取 IMU 数据，发布 `/imu_gnss_driver/imu0/data`、`/imu_gnss_driver/imu1/data` 等话题 |
-| `ublox_driver` | u-blox ZED-F9P 驱动，发布 PVT、LLA、星历等 GNSS 话题 |
-| `gnss_comm` | `ublox_driver` 依赖的自定义 GNSS 消息定义与工具函数 |
-| `mqtt_all` | 订阅 IMU + GNSS ROS 话题，拼接为一条组合消息，通过 LTE 模块转发到 MQTT |
-| `mqtt_gnss` | 仅转发 GNSS 数据到 MQTT |
-| `mqtt_imu` | 仅转发 IMU 数据到 MQTT |
-| `mqtt_client` | MQTT 客户端，负责从 Broker 桥接消息到 ROS |
-| `mqtt2ros_all` | 将 `/mqtt/combined` 组合消息解析回 `/mqtt_imu0`、`/mqtt_imu1`、`/mqtt_gnss` |
-| `visualize_driver` | 订阅 ROS 话题并通过 WebSocket 推送给网页前端 |
+| `imu_gnss_driver` | Reads IMU data from serial and publishes topics such as `/imu_gnss_driver/imu0/data` and `/imu_gnss_driver/imu1/data` |
+| `ublox_driver` | u-blox ZED-F9P driver that publishes PVT, LLA, ephemeris, and related GNSS topics |
+| `gnss_comm` | Custom GNSS message definitions and utility functions used by `ublox_driver` |
+| `mqtt_all` | Subscribes to IMU + GNSS ROS topics, packs them into one combined message, and forwards it to MQTT through the LTE module |
+| `mqtt_gnss` | Publishes GNSS-only data to MQTT |
+| `mqtt_imu` | Publishes IMU-only data to MQTT |
+| `mqtt_client` | MQTT client bridge that brings broker messages into ROS |
+| `mqtt2ros_all` | Parses `/mqtt/combined` back into `/mqtt_imu0`, `/mqtt_imu1`, and `/mqtt_gnss` |
+| `visualize_driver` | Subscribes to ROS topics and pushes data to the frontend through WebSocket |
 
-## 数据链路
+## Data Flow
 
-典型发送端链路：
+Typical sender-side flow:
 
 ```text
-IMU 串口设备 -> imu_gnss_driver -> /imu_gnss_driver/imu*/data
+IMU serial device -> imu_gnss_driver -> /imu_gnss_driver/imu*/data
 u-blox GNSS -> ublox_driver -> /ublox_driver/receiver_lla, /receiver_pvt ...
-ROS 话题 -> mqtt_all -> LTE 模块 AT 指令 -> MQTT Broker
+ROS topics -> mqtt_all -> LTE module AT commands -> MQTT Broker
 ```
 
-典型接收端链路：
+Typical receiver-side flow:
 
 ```text
 MQTT Broker -> mqtt_client -> /mqtt/combined
 /mqtt/combined -> mqtt2ros_all -> /mqtt_imu0, /mqtt_imu1, /mqtt_gnss
-ROS 话题 -> visualize_driver -> WebSocket(:9002) -> Web 页面
+ROS topics -> visualize_driver -> WebSocket(:9002) -> Web page
 ```
 
-## 环境要求
+## Requirements
 
 - Ubuntu 20.04
 - ROS Noetic
-- `catkin_tools`(Optional, 建议先完成 ROS 基础环境初始化，并确认 `catkin build` 可正常使用。)
+- `catkin_tools`
 
+Make sure your ROS environment is initialized correctly and `catkin build` is available before building this workspace.
 
-## 依赖安装
+## Install Dependencies
 
 ```bash
 sudo apt-get update
@@ -61,9 +64,9 @@ sudo apt-get install -y \
   libjsoncpp-dev
 ```
 
-## 编译
+## Build
 
-在工作区根目录执行：
+Run the following in the workspace root:
 
 ```bash
 cd ~/GNSS_IMU_LTE_Driver
@@ -73,13 +76,13 @@ catkin build
 source devel/setup.bash
 ```
 
-`gnss_comm` 包含自定义消息，先单独编译可以减少首次构建时的依赖问题。
+`gnss_comm` contains custom message definitions. Building it first helps avoid dependency issues during the initial build.
 
-## 启动前配置
+## Configuration Before Launch
 
-### 1. 串口配置
+### 1. Serial Port Configuration
 
-根据实际设备修改以下文件：
+Update these files based on your actual hardware:
 
 - `src/imu_gnss_driver/config/serial_params.yaml`
   - `port`
@@ -95,30 +98,30 @@ source devel/setup.bash
 - `src/mqtt_gnss/config/serial_params.yaml`
 - `src/mqtt_imu/config/serial_params.yaml`
 
-常见设备名包括 `/dev/ttyACM0`、`/dev/ttyACM1`、`/dev/ttyUSB0`。
+Common device names include `/dev/ttyACM0`, `/dev/ttyACM1`, and `/dev/ttyUSB0`.
 
-### 2. MQTT 配置
+### 2. MQTT Configuration
 
-默认 Broker 与主题配置如下：
+Default broker and topic settings:
 
-- Broker：`broker.emqx.io:1883`
-- 组合消息主题：`test/combined`
-- IMU 主题：`test/imu`
-- GNSS 主题：`test/gnss`
+- Broker: `broker.emqx.io:1883`
+- Combined message topic: `test/combined`
+- IMU topic: `test/imu`
+- GNSS topic: `test/gnss`
 
-相关配置文件：
+Relevant configuration files:
 
 - `src/mqtt_client/config/params.yaml`
 - `src/mqtt_all/config/mqtt.yaml`
 - `src/mqtt_imu/config/mqtt.yaml`
 
-注意：当前 `mqtt_all.launch` 只加载了串口配置文件，没有自动加载 `mqtt.yaml`。也就是说，`mqtt_all` 和 `mqtt_imu` 代码中的 MQTT 参数主要依赖默认值；如果你要改 Broker、用户名、主题，建议同步修改 launch 文件或手动把 YAML 加载到参数服务器。
+Note: `mqtt_all.launch` currently loads only the serial configuration file and does not automatically load `mqtt.yaml`. In practice, `mqtt_all` and `mqtt_imu` mainly rely on the default MQTT parameter values in code. If you need to change the broker, credentials, or topics, update the launch file or load the YAML into the parameter server manually.
 
-## 快速开始
+## Quick Start
 
-### 方案一：发送端
+### Option 1: Sender Side
 
-依次启动：
+Launch in sequence:
 
 ```bash
 cd ~/GNSS_IMU_LTE_Driver
@@ -130,15 +133,15 @@ roslaunch ublox_driver ublox_driver.launch
 roslaunch mqtt_all mqtt_all.launch
 ```
 
-也可以直接执行仓库内脚本：
+Or use the helper script:
 
 ```bash
 bash sender.sh
 ```
 
-### 方案二：接收端
+### Option 2: Receiver Side
 
-依次启动：
+Launch in sequence:
 
 ```bash
 cd ~/GNSS_IMU_LTE_Driver
@@ -150,21 +153,21 @@ roslaunch mqtt2ros_all all.launch
 rosrun visualize_driver visualize_driver
 ```
 
-也可以直接执行：
+Or use:
 
 ```bash
 bash receiver.sh
 ```
 
-### 方案三：单机联调
+### Option 3: Single-Machine End-to-End Debugging
 
-如果要在同一台机器上同时跑发送和接收链路，可参考：
+To run both sender and receiver chains on the same machine, refer to:
 
 ```bash
 bash data_collect.sh
 ```
 
-该脚本会顺序启动：
+That script starts:
 
 - `imu_gnss_driver`
 - `ublox_driver`
@@ -172,9 +175,9 @@ bash data_collect.sh
 - `mqtt_client`
 - `mqtt2ros_all`
 
-## 关键 ROS 话题
+## Key ROS Topics
 
-发送端原始数据：
+Raw sender-side data:
 
 - `/imu_gnss_driver/imu0/data`
 - `/imu_gnss_driver/imu1/data`
@@ -183,66 +186,66 @@ bash data_collect.sh
 - `/ublox_driver/receiver_pvt`
 - `/ublox_driver/receiver_lla`
 
-MQTT 接收端恢复后的数据：
+Recovered data on the MQTT receiver side:
 
 - `/mqtt/combined`
 - `/mqtt_imu0`
 - `/mqtt_imu1`
 - `/mqtt_gnss`
 
-## 可视化
+## Visualization
 
-`visualize_driver` 默认启动一个 WebSocket 服务：
+`visualize_driver` starts a WebSocket server by default:
 
-- 地址：`ws://<host>:9002`
+- Address: `ws://<host>:9002`
 
-它当前订阅以下 ROS 话题：
+It currently subscribes to:
 
 - `/imu_gnss_driver/imu0/data`
 - `/imu_gnss_driver/imu1/data`
 - `/ublox_driver/receiver_lla`
 
-前端页面可参考：
+Frontend pages available in the repository:
 
 - `src/visualize_driver/web/index.html`
 - `src/Web_Visualize_None_ROS/index.html`
 
-## 常用脚本
+## Helper Scripts
 
-| 脚本 | 说明 |
+| Script | Purpose |
 | --- | --- |
-| `sender.sh` | 启动发送端链路 |
-| `receiver.sh` | 启动接收端链路并打开可视化节点 |
-| `data_collect.sh` | 单机联调时同时启动发送与接收相关节点 |
-| `show.sh` | 与 `sender.sh` 类似的简化启动脚本 |
+| `sender.sh` | Starts the sender-side chain |
+| `receiver.sh` | Starts the receiver-side chain and visualization node |
+| `data_collect.sh` | Starts sender and receiver related nodes for single-machine debugging |
+| `show.sh` | A simplified startup script similar to `sender.sh` |
 
-## 常见问题
+## Troubleshooting
 
-### 串口打不开
+### Serial Port Cannot Be Opened
 
-- 检查设备名是否正确
-- 检查当前用户是否具备串口权限
-- 可用 `ls /dev/ttyACM* /dev/ttyUSB*` 确认设备是否存在
+- Check whether the device name is correct.
+- Check whether the current user has serial port permissions.
+- Use `ls /dev/ttyACM* /dev/ttyUSB*` to verify that the device exists.
 
-### `ublox_driver` 正常启动但没有数据
+### `ublox_driver` Starts but No Data Is Published
 
-- 确认 `src/gnss_driver/config/ipnl_config.yaml` 中 `input_serial_port` 与波特率正确
-- 确认接收机实际输出 UBX 数据
-- 如需保存原始数据，检查 `to_file` 与 `dump_dir` 是否可写
+- Check `input_serial_port` and baud rate in `src/gnss_driver/config/ipnl_config.yaml`.
+- Make sure the receiver is actually outputting UBX data.
+- If raw logging is enabled, verify that `to_file` and `dump_dir` are writable.
 
-### MQTT 收不到消息
+### No MQTT Messages Are Received
 
-- 检查 LTE 模块串口是否配置正确
-- 检查 Broker 地址、端口、用户名和密码
-- 使用 MQTTX 等工具订阅 `test/combined` 验证链路
+- Check whether the LTE module serial port is configured correctly.
+- Check broker address, port, username, and password.
+- Use MQTTX or another MQTT client to subscribe to `test/combined` and verify the link.
 
-### 可视化页面无数据
+### Visualization Page Shows No Data
 
-- 确认 `visualize_driver` 已启动
-- 确认 WebSocket 端口 `9002` 未被占用
-- 确认发送端话题确实存在，可通过 `rostopic list` 检查
+- Make sure `visualize_driver` is running.
+- Make sure port `9002` is not occupied.
+- Make sure the source ROS topics exist by checking `rostopic list`.
 
-## 备注
+## Notes
 
-- 顶层工程名为 `GNSS_IMU_LTE_Driver`，但 GNSS 包的 ROS 包名实际是 `ublox_driver`，启动时请使用 `roslaunch ublox_driver ublox_driver.launch`。
-- `mqtt_client` 和 `mqtt_client_interfaces` 来自独立 MQTT ROS 桥接实现，当前仓库将其作为工作区一部分直接使用。
+- The workspace name is `GNSS_IMU_LTE_Driver`, but the actual ROS package name for the GNSS driver is `ublox_driver`, so use `roslaunch ublox_driver ublox_driver.launch`.
+- `mqtt_client` and `mqtt_client_interfaces` come from a standalone MQTT ROS bridge implementation and are included directly in this workspace.
