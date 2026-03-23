@@ -87,7 +87,7 @@ source devel/setup.bash
 - `src/imu_gnss_driver/config/serial_params.yaml`
   - `port`
   - `baudrate`
-- `src/gnss_driver/config/ipnl_config.yaml`
+- `src/ublox_driver/config/driver_config.yaml`
   - `input_serial_port`
   - `serial_baud_rate`
   - `to_file`
@@ -229,7 +229,7 @@ MQTT 接收端恢复后的数据：
 
 ### `ublox_driver` 正常启动但没有数据
 
-- 确认 `src/gnss_driver/config/ipnl_config.yaml` 中 `input_serial_port` 与波特率正确
+- 确认 `src/ublox_driver/config/driver_config.yaml` 中 `input_serial_port` 与波特率正确
 - 确认接收机实际输出 UBX 数据
 - 如需保存原始数据，检查 `to_file` 与 `dump_dir` 是否可写
 

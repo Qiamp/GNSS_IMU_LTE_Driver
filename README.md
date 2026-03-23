@@ -87,7 +87,7 @@ Update these files based on your actual hardware:
 - `src/imu_gnss_driver/config/serial_params.yaml`
   - `port`
   - `baudrate`
-- `src/gnss_driver/config/ipnl_config.yaml`
+- `src/ublox_driver/config/driver_config.yaml`
   - `input_serial_port`
   - `serial_baud_rate`
   - `to_file`
@@ -229,7 +229,7 @@ Frontend pages available in the repository:
 
 ### `ublox_driver` Starts but No Data Is Published
 
-- Check `input_serial_port` and baud rate in `src/gnss_driver/config/ipnl_config.yaml`.
+- Check `input_serial_port` and baud rate in `src/ublox_driver/config/driver_config.yaml`.
 - Make sure the receiver is actually outputting UBX data.
 - If raw logging is enabled, verify that `to_file` and `dump_dir` are writable.
 
