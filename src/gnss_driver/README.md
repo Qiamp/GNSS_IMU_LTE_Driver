@@ -1,6 +1,14 @@
-# ublox_driver
+# gnss_driver
 
-**Authors/Maintainers:** CAO Shaozu (shaozu.cao AT gmail.com)
+**Original Author:** CAO Shaozu (shaozu.cao AT gmail.com)
+
+**Maintainer:** [JIAHAO-FUHUA](https://github.com/JIAHAO-FUHUA) (yh701219 AT gmail.com)
+
+This fork fixes the ephemeris parsing issue and adds RTCM3 message publishing on the `/rtcm` topic (type: `rtcm_msgs/Message`).
+
+```bash
+sudo apt install ros-noetic-rtcm-msgs
+```
 
 The *ublox_driver* provides essential functionalities for u-blox GNSS receivers. This package is originally designed for [u-blox ZED-F9P module](https://www.u-blox.com/en/product/zed-f9p-module) according to the specification [UBX-18010854](https://www.u-blox.com/en/docs/UBX-18010854), but should also be compatible to other 8-series or 9-series u-blox receivers as long as the interface is the same.
 
@@ -23,13 +31,13 @@ We use [Eigen 3.3.3](https://gitlab.com/libeigen/eigen/-/archive/3.3.3/eigen-3.3
 Our software utilizes [Boost](https://www.boost.org/) library for serial and socket manipulation. Using command `sudo apt-get install libboost-all-dev` to install *Boost*.
 
 ### 1.5 gnss_comm
-This package also requires [gnss_comm](https://github.com/HKUST-Aerial-Robotics/gnss_comm) for ROS message definitions and some utility functions. Follow [those instructions](https://github.com/HKUST-Aerial-Robotics/gnss_comm#1-prerequisites) to build the *gnss_comm* package.
+This package also requires [gnss_comm](https://github.com/JIAHAO-FUHUA/gnss_comm.git) for ROS message definitions and some utility functions. Follow [those instructions](https://github.com/HKUST-Aerial-Robotics/gnss_comm#1-prerequisites) to build the *gnss_comm* package.
 
 ## 2. Build ublox_driver
 Clone the repository to your catkin workspace (for example `~/catkin_ws/`):
 ```
 cd ~/catkin_ws/src/
-git clone https://github.com/HKUST-Aerial-Robotics/ublox_driver.git
+git clone https://github.com/JIAHAO-FUHUA/gnss_driver.git
 ```
 Then build the package with:
 ```
