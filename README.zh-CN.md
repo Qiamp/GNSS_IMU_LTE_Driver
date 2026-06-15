@@ -20,7 +20,7 @@
 | `gnss_comm` | `ublox_driver` 依赖的自定义 GNSS 消息定义与工具函数 |
 | `mqtt_all` | 订阅 IMU + GNSS ROS 话题，拼接为一条组合消息，通过 LTE 模块转发到 MQTT |
 | `mqtt_gnss` | 仅转发 GNSS 数据到 MQTT |
-| `mqtt_imu` | 仅转发 IMU 数据到 MQTT |
+| `mqtt_imu` | 当前仅转发 IMU0 数据到 MQTT |
 | `mqtt_client` | MQTT 客户端，负责从 Broker 桥接消息到 ROS |
 | `mqtt2ros_all` | 将 `/mqtt/combined` 组合消息解析回 `/mqtt_imu0`、`/mqtt_imu1`、`/mqtt_gnss` |
 | `visualize_driver` | 订阅 ROS 话题并通过 WebSocket 推送给网页前端 |
@@ -47,7 +47,7 @@ ROS 话题 -> visualize_driver -> WebSocket(:9002) -> Web 页面
 
 - Ubuntu 20.04
 - ROS Noetic
-- `catkin_tools`
+- `catkin_tools`（通过 `python3-catkin-tools` 安装）
 
 建议先完成 ROS 基础环境初始化，并确认 `catkin build` 可正常使用。
 
@@ -56,9 +56,14 @@ ROS 话题 -> visualize_driver -> WebSocket(:9002) -> Web 页面
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
+  python3-catkin-tools \
   ros-noetic-serial \
   ros-noetic-paho-mqtt-cpp \
   ros-noetic-paho-mqtt-c \
+  ros-noetic-rtcm-msgs \
+  libboost-all-dev \
+  libeigen3-dev \
+  libgoogle-glog-dev \
   libfmt-dev \
   libwebsocketpp-dev \
   libjsoncpp-dev
@@ -87,7 +92,8 @@ source devel/setup.bash
 - `src/imu_gnss_driver/config/serial_params.yaml`
   - `port`
   - `baudrate`
-- `src/ublox_driver/config/driver_config.yaml`
+  - `imu_gyro_unit`（`rad` 或 `deg`）
+- `src/gnss_driver/config/driver_config.yaml`
   - `input_serial_port`
   - `serial_baud_rate`
   - `to_file`
@@ -100,6 +106,8 @@ source devel/setup.bash
 
 常见设备名包括 `/dev/ttyACM0`、`/dev/ttyACM1`、`/dev/ttyUSB0`。
 
+GNSS 驱动源码目录是 `src/gnss_driver`，但 ROS 包名是 `ublox_driver`。
+
 ### 2. MQTT 配置
 
 默认 Broker 与主题配置如下：
@@ -109,13 +117,14 @@ source devel/setup.bash
 - IMU 主题：`test/imu`
 - GNSS 主题：`test/gnss`
 
-相关配置文件：
+相关 MQTT 设置：
 
-- `src/mqtt_client/config/params.yaml`
+- `src/mqtt_client/config/params.yaml`（由 `mqtt_client/standalone.launch` 加载）
 - `src/mqtt_all/config/mqtt.yaml`
 - `src/mqtt_imu/config/mqtt.yaml`
+- `src/mqtt_gnss/src/mqtt_gnss_driver_node.cpp`（MQTT 参数当前硬编码在源码中）
 
-注意：当前 `mqtt_all.launch` 只加载了串口配置文件，没有自动加载 `mqtt.yaml`。也就是说，`mqtt_all` 和 `mqtt_imu` 代码中的 MQTT 参数主要依赖默认值；如果你要改 Broker、用户名、主题，建议同步修改 launch 文件或手动把 YAML 加载到参数服务器。
+注意：当前 `mqtt_all.launch` 和 `src/mqtt_imu/launch/mqtt_gnss.launch` 只加载串口配置文件，没有自动加载 `mqtt.yaml`。也就是说，`mqtt_all` 和 `mqtt_imu` 主要依赖代码中的 MQTT 默认值，除非你同步修改 launch 文件或手动把 YAML 加载到参数服务器。`mqtt_gnss` 目前没有 MQTT YAML 配置文件；如果要改 Broker、用户名、密码或主题，需要改源码或先补充参数加载。
 
 ## 快速开始
 
@@ -210,6 +219,8 @@ MQTT 接收端恢复后的数据：
 - `src/visualize_driver/web/index.html`
 - `src/Web_Visualize_None_ROS/index.html`
 
+`src/visualize_driver/web/index.html` 当前固定连接 `ws://localhost:9002`。如果从另一台机器打开页面，需要修改 HTML 中的 `WS_SERVER`，或通过指向 ROS 机器的主机名/反向代理访问。
+
 ## 常用脚本
 
 | 脚本 | 说明 |
@@ -229,7 +240,7 @@ MQTT 接收端恢复后的数据：
 
 ### `ublox_driver` 正常启动但没有数据
 
-- 确认 `src/ublox_driver/config/driver_config.yaml` 中 `input_serial_port` 与波特率正确
+- 确认 `src/gnss_driver/config/driver_config.yaml` 中 `input_serial_port` 与波特率正确
 - 确认接收机实际输出 UBX 数据
 - 如需保存原始数据，检查 `to_file` 与 `dump_dir` 是否可写
 

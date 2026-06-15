@@ -20,7 +20,7 @@ Core packages:
 | `gnss_comm` | Custom GNSS message definitions and utility functions used by `ublox_driver` |
 | `mqtt_all` | Subscribes to IMU + GNSS ROS topics, packs them into one combined message, and forwards it to MQTT through the LTE module |
 | `mqtt_gnss` | Publishes GNSS-only data to MQTT |
-| `mqtt_imu` | Publishes IMU-only data to MQTT |
+| `mqtt_imu` | Publishes IMU0-only data to MQTT |
 | `mqtt_client` | MQTT client bridge that brings broker messages into ROS |
 | `mqtt2ros_all` | Parses `/mqtt/combined` back into `/mqtt_imu0`, `/mqtt_imu1`, and `/mqtt_gnss` |
 | `visualize_driver` | Subscribes to ROS topics and pushes data to the frontend through WebSocket |
@@ -47,7 +47,7 @@ ROS topics -> visualize_driver -> WebSocket(:9002) -> Web page
 
 - Ubuntu 20.04
 - ROS Noetic
-- `catkin_tools`
+- `catkin_tools` (installed as `python3-catkin-tools`)
 
 Make sure your ROS environment is initialized correctly and `catkin build` is available before building this workspace.
 
@@ -56,9 +56,14 @@ Make sure your ROS environment is initialized correctly and `catkin build` is av
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
+  python3-catkin-tools \
   ros-noetic-serial \
   ros-noetic-paho-mqtt-cpp \
   ros-noetic-paho-mqtt-c \
+  ros-noetic-rtcm-msgs \
+  libboost-all-dev \
+  libeigen3-dev \
+  libgoogle-glog-dev \
   libfmt-dev \
   libwebsocketpp-dev \
   libjsoncpp-dev
@@ -87,7 +92,8 @@ Update these files based on your actual hardware:
 - `src/imu_gnss_driver/config/serial_params.yaml`
   - `port`
   - `baudrate`
-- `src/ublox_driver/config/driver_config.yaml`
+  - `imu_gyro_unit` (`rad` or `deg`)
+- `src/gnss_driver/config/driver_config.yaml`
   - `input_serial_port`
   - `serial_baud_rate`
   - `to_file`
@@ -100,6 +106,8 @@ Update these files based on your actual hardware:
 
 Common device names include `/dev/ttyACM0`, `/dev/ttyACM1`, and `/dev/ttyUSB0`.
 
+The GNSS driver source directory is `src/gnss_driver`, while the ROS package name is `ublox_driver`.
+
 ### 2. MQTT Configuration
 
 Default broker and topic settings:
@@ -109,13 +117,14 @@ Default broker and topic settings:
 - IMU topic: `test/imu`
 - GNSS topic: `test/gnss`
 
-Relevant configuration files:
+Relevant MQTT settings:
 
-- `src/mqtt_client/config/params.yaml`
+- `src/mqtt_client/config/params.yaml` (loaded by `mqtt_client/standalone.launch`)
 - `src/mqtt_all/config/mqtt.yaml`
 - `src/mqtt_imu/config/mqtt.yaml`
+- `src/mqtt_gnss/src/mqtt_gnss_driver_node.cpp` (MQTT settings are currently hard-coded)
 
-Note: `mqtt_all.launch` currently loads only the serial configuration file and does not automatically load `mqtt.yaml`. In practice, `mqtt_all` and `mqtt_imu` mainly rely on the default MQTT parameter values in code. If you need to change the broker, credentials, or topics, update the launch file or load the YAML into the parameter server manually.
+Note: `mqtt_all.launch` and `src/mqtt_imu/launch/mqtt_gnss.launch` currently load only serial configuration files and do not automatically load `mqtt.yaml`. In practice, `mqtt_all` and `mqtt_imu` mainly rely on the default MQTT parameter values in code unless you update the launch files or load the YAML into the parameter server manually. `mqtt_gnss` does not have an MQTT YAML file yet; change its broker, credentials, or topic in code or add parameter loading before use.
 
 ## Quick Start
 
@@ -210,6 +219,8 @@ Frontend pages available in the repository:
 - `src/visualize_driver/web/index.html`
 - `src/Web_Visualize_None_ROS/index.html`
 
+`src/visualize_driver/web/index.html` currently connects to `ws://localhost:9002`. If you open that page from another machine, update the `WS_SERVER` value in the HTML file or serve it through a host/reverse proxy that maps to the ROS machine.
+
 ## Helper Scripts
 
 | Script | Purpose |
@@ -229,7 +240,7 @@ Frontend pages available in the repository:
 
 ### `ublox_driver` Starts but No Data Is Published
 
-- Check `input_serial_port` and baud rate in `src/ublox_driver/config/driver_config.yaml`.
+- Check `input_serial_port` and baud rate in `src/gnss_driver/config/driver_config.yaml`.
 - Make sure the receiver is actually outputting UBX data.
 - If raw logging is enabled, verify that `to_file` and `dump_dir` are writable.
 
